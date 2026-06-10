@@ -113,19 +113,28 @@ runs:
       env:
         targets: ${{inputs.target}}
         components: ${{inputs.components}}
-        toolchain: ${{inputs.toolchain}}
+        downgrade: ${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}
       shell: bash
       run: |
         : construct rustup command line
-        safe_targets=$(printf '%s' "$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" | tr -d '\n\r')
-        safe_components=$(printf '%s' "$(for c in ${components//,/ }; do echo -n ' --component' $c; done)" | tr -d '\n\r')
-        echo "targets=$safe_targets" >> "$GITHUB_OUTPUT"
-        echo "components=$safe_components" >> "$GITHUB_OUTPUT"
-        if [[ "$toolchain" == *nightly* && -n "$components" ]]; then
-          downgrade=" --allow-downgrade"
-        else
-          downgrade=""
+        safe_targets=""
+        if [[ -n "$targets" ]]; then
+          IFS=',' read -ra target_arr <<< "$targets"
+          for t in "${target_arr[@]}"; do
+            safe_targets="$safe_targets --target $t"
+          done
         fi
+        safe_targets=$(printf '%s' "$safe_targets" | tr -d '\n\r')
+        echo "targets=$safe_targets" >> "$GITHUB_OUTPUT"
+        safe_components=""
+        if [[ -n "$components" ]]; then
+          IFS=',' read -ra component_arr <<< "$components"
+          for c in "${component_arr[@]}"; do
+            safe_components="$safe_components --component $c"
+          done
+        fi
+        safe_components=$(printf '%s' "$safe_components" | tr -d '\n\r')
+        echo "components=$safe_components" >> "$GITHUB_OUTPUT"
         safe_downgrade=$(printf '%s' "$downgrade" | tr -d '\n\r')
         echo "downgrade=$safe_downgrade" >> "$GITHUB_OUTPUT"
     # The environment variables always need to be set before the caching action
@@ -175,9 +184,13 @@ runs:
 
           # Resolve the correct CARGO_HOME path depending on OS
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "${CARGO_HOME:-$USERPROFILE/.cargo}/bin" | sed 's|/|\\|g' >> $GITHUB_PATH
+            safe_cargo_home=$(printf '%s' "${CARGO_HOME:-$USERPROFILE/.cargo}" | tr -d '\n\r')
+            safe_path=$(printf '%s' "${safe_cargo_home}/bin" | sed 's|/|\\|g' | tr -d '\n\r')
+            printf '%s\n' "$safe_path" >> "$GITHUB_PATH"
           else
-            echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
+            safe_cargo_home=$(printf '%s' "${CARGO_HOME:-$HOME/.cargo}" | tr -d '\n\r')
+            safe_path=$(printf '%s' "${safe_cargo_home}/bin" | tr -d '\n\r')
+            printf '%s\n' "$safe_path" >> "$GITHUB_PATH"
           fi
         fi
       env:
@@ -189,6 +202,9 @@ runs:
         components: ${{inputs.components}}
         override: ${{inputs.override}}
         rust_src_dir: ${{inputs.rust-src-dir}}
+        flag_targets: ${{steps.flags.outputs.targets}}
+        flag_components: ${{steps.flags.outputs.components}}
+        flag_downgrade: ${{steps.flags.outputs.downgrade}}
       shell: bash
       run: |
         # Check if value is set
@@ -211,22 +227,31 @@ runs:
           # rustup toolchain install is the new explicit way
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
-          if [[ -n $components ]]; then
-            rustup component add ${components//,/ }
+          if [[ -n "$components" ]]; then
+            IFS=',' read -ra component_list <<< "$components"
+            rustup component add "${component_list[@]}"
           fi
-          if [[ -n $targets ]]; then
-            rustup target add ${targets//,/ }
+          if [[ -n "$targets" ]]; then
+            IFS=',' read -ra target_list <<< "$targets"
+            rustup target add "${target_list[@]}"
           fi
         else
           if [[ -z "$toolchain" ]]
           then
             toolchain=stable
           fi
-          rustup toolchain install ${toolchain//,/ } ${{steps.flags.outputs.targets}}${{steps.flags.outputs.components}} --profile minimal${{steps.flags.outputs.downgrade}} --no-self-update
+          IFS=',' read -ra toolchain_list <<< "$toolchain"
+          # flag_targets and flag_components are pre-built "--target foo --target bar" strings
+          # flag_downgrade is either empty or " --allow-downgrade"
+          # We use eval-safe read -ra splitting on the flag strings
+          read -ra ft_args <<< "$flag_targets"
+          read -ra fc_args <<< "$flag_components"
+          read -ra fd_args <<< "$flag_downgrade"
+          rustup toolchain install "${toolchain_list[@]}" "${ft_args[@]}" "${fc_args[@]}" --profile minimal "${fd_args[@]}" --no-self-update
           # Take the last element from the list
           if [[ "$override" == "true" ]]
           then
-            rustup override set ${toolchain//*,/ }
+            rustup override set "${toolchain_list[-1]}"
           fi
         fi
     - id: versions
@@ -246,15 +271,17 @@ runs:
         HASH=$(rustc --version --verbose | sed -ne 's/^commit-hash: //p')
         echo "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT
     - name: Downgrade registry access protocol when needed
+      env:
+        RUSTC_VERSION: ${{steps.versions.outputs.rustc-version}}
       shell: bash
       run: |
         # Not all versions support setting CARGO_REGISTRIES_CRATES_IO_PROTOCOL
         # On versions 1.66, 1.67, and 1.68.0-nightly the value "sparse" is still unstable.
         # https://github.com/dtolnay/rust-toolchain/pull/69#discussion_r1107268108
         # If we detect an incompatible value, set it to "git" which is always supported.
-        if [[ "${{steps.versions.outputs.rustc-version}}" =~ ^rustc\ (1\.6[67]\.|1\.68\.0-nightly) && "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL}" == "sparse" ]]; then
+        if [[ "$RUSTC_VERSION" =~ ^rustc\ (1\.6[67]\.|1\.68\.0-nightly) && "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL}" == "sparse" ]]; then
           echo "Downgrade cargo registry protocol to git"
-          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> $GITHUB_ENV
+          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> "$GITHUB_ENV"
         fi
     - name: Setup Rust Caching
       if: inputs.cache == 'true'

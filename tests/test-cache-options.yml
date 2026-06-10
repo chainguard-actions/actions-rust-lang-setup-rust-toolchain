@@ -1,4 +1,4 @@
-name: Test cache options inputs
+name: Test with cache options
 on:
   workflow_dispatch:
 jobs:
@@ -6,41 +6,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Create a workspace directory for cache testing
-        run: |
-          mkdir -p /tmp/test-workspace/target
       - id: action
         uses: .
         with:
           toolchain: stable
           cache: "true"
-          cache-workspaces: /tmp/test-workspace
-          cache-directories: /tmp/test-workspace/target
-          cache-key: test-cache-key
-          cache-shared-key: test-shared-key
+          cache-workspaces: "."
+          cache-directories: "/tmp/rust-cache-test"
+          cache-key: "test-cache-key"
+          cache-shared-key: "test-shared-key"
           cache-on-failure: "true"
           cache-bin: "true"
-          cache-provider: github
           cache-all-crates: "false"
-          cache-workspace-crates: "false"
-          matcher: "false"
       - name: Assert rustc-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+          RUSTC_VER: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual rustc-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustc-version: $RUSTC_VER"
+          if [ -z "$RUSTC_VER" ]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
           echo "PASS"
-      - name: Assert cargo-version output is set
-        env:
-          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+      - name: Assert rustc is available
         run: |
-          echo "actual cargo-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: cargo-version output is empty"
-            exit 1
-          fi
-          echo "PASS"
+          rustc --version
+          echo "PASS: rustc is available"

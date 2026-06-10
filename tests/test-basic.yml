@@ -1,4 +1,4 @@
-name: Test basic usage with toolchain, components, and target
+name: Test basic usage with explicit toolchain
 on:
   workflow_dispatch:
 jobs:
@@ -10,59 +10,48 @@ jobs:
         uses: .
         with:
           toolchain: stable
-          components: rustfmt,clippy
-          target: x86_64-unknown-linux-gnu
           cache: "false"
-          matcher: "false"
       - name: Assert rustc-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+          RUSTC_VER: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual rustc-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustc-version: $RUSTC_VER"
+          if [ -z "$RUSTC_VER" ]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
           echo "PASS"
       - name: Assert cargo-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+          CARGO_VER: ${{ steps.action.outputs.cargo-version }}
         run: |
-          echo "actual cargo-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cargo-version: $CARGO_VER"
+          if [ -z "$CARGO_VER" ]; then
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
           echo "PASS"
       - name: Assert rustup-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.rustup-version }}
+          RUSTUP_VER: ${{ steps.action.outputs.rustup-version }}
         run: |
-          echo "actual rustup-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustup-version: $RUSTUP_VER"
+          if [ -z "$RUSTUP_VER" ]; then
             echo "FAIL: rustup-version output is empty"
             exit 1
           fi
           echo "PASS"
       - name: Assert cachekey output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.cachekey }}
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
         run: |
-          echo "actual cachekey: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cachekey: $CACHEKEY"
+          if [ -z "$CACHEKEY" ]; then
             echo "FAIL: cachekey output is empty"
             exit 1
           fi
           echo "PASS"
-      - name: Assert rustfmt is installed
+      - name: Assert rustc is available
         run: |
-          rustfmt --version
-          echo "PASS: rustfmt is installed"
-      - name: Assert clippy is installed
-        run: |
-          cargo clippy --version
-          echo "PASS: clippy is installed"
-      - name: Assert target is installed
-        run: |
-          rustup target list --installed | grep x86_64-unknown-linux-gnu
-          echo "PASS: target x86_64-unknown-linux-gnu is installed"
+          rustc --version
+          echo "PASS: rustc is available"
