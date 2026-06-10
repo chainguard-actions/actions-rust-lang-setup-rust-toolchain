@@ -10,6 +10,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
+| v1.15.3 | [`v1.15.3`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.15.3) | [`a0b538f`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/a0b538fa0b742a6aa35d6e2c169b4bd06d225a98) |
 | v1.16.1 | [`v1.16.1`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.16.1) | [`46268bd`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/46268bd060767258de96ed93c1251119784f2ab6) |
 
 ## Privacy
