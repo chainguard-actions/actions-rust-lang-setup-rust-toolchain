@@ -1,0 +1,52 @@
+name: Test rust-src-dir input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create a Rust source subdirectory
+        run: |
+          mkdir -p rust-src
+          cat > rust-src/rust-toolchain.toml << 'EOF'
+          [toolchain]
+          channel = "stable"
+          EOF
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          rust-src-dir: rust-src
+          cache: "false"
+          matcher: "false"
+      - name: Assert rustc-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual rustc-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cargo-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "actual cargo-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert rustup-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustup-version }}
+        run: |
+          echo "actual rustup-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustup-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
