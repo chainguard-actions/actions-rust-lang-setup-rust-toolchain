@@ -1,0 +1,51 @@
+name: Test cache options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create workspace directory for cache test
+        run: |
+          mkdir -p /tmp/test-workspace
+          cat > /tmp/test-workspace/Cargo.toml << 'EOF'
+          [package]
+          name = "test-workspace"
+          version = "0.1.0"
+          edition = "2021"
+          EOF
+          mkdir -p /tmp/test-workspace/src
+          echo 'fn main() {}' > /tmp/test-workspace/src/main.rs
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          cache: "true"
+          cache-workspaces: /tmp/test-workspace
+          cache-directories: /tmp/test-workspace/target
+          cache-key: test-cache-key
+          cache-shared-key: test-shared-key
+          cache-on-failure: "true"
+          cache-save-if: "false"
+          matcher: "false"
+      - name: Assert rustc-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$ACTUAL"
+      - name: Assert cargo-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          echo "PASS: cargo-version=$ACTUAL"
