@@ -1,4 +1,4 @@
-name: Test cache options
+name: Test cache options inputs
 on:
   workflow_dispatch:
 jobs:
@@ -6,24 +6,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create a minimal Cargo workspace for cache testing
+        run: |
+          mkdir -p /tmp/rust-workspace/src
+          cat > /tmp/rust-workspace/Cargo.toml <<'EOF'
+          [package]
+          name = "hello"
+          version = "0.1.0"
+          edition = "2021"
+          EOF
+          cat > /tmp/rust-workspace/src/main.rs <<'EOF'
+          fn main() { println!("hello"); }
+          EOF
       - id: action
         uses: .
         with:
           toolchain: stable
           cache: "true"
-          cache-workspaces: "."
-          cache-directories: "/tmp/rust-cache-test"
-          cache-key: "test-cache-key"
-          cache-shared-key: "test-shared-key"
+          cache-workspaces: /tmp/rust-workspace -> target
+          cache-directories: /tmp/rust-workspace/target
+          cache-key: test-cache-key
+          cache-shared-key: test-shared-key
           cache-on-failure: "true"
           cache-bin: "true"
-          cache-provider: "github"
+          cache-provider: github
           matcher: "false"
       - name: Assert rustc-version output is set
         env:
           ACTUAL: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "rustc-version: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
@@ -33,7 +45,7 @@ jobs:
         env:
           ACTUAL: ${{ steps.action.outputs.cachekey }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "cachekey: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: cachekey output is empty"
             exit 1

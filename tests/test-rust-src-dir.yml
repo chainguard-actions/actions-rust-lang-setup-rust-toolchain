@@ -6,27 +6,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Create a Rust source subdirectory
+      - name: Create rust source directory with toolchain file
         run: |
-          mkdir -p /tmp/rust-src-subdir
-          cat > /tmp/rust-src-subdir/rust-toolchain.toml << 'EOF'
+          mkdir -p actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.4/tests/fixtures/rust-src/src
+          cat > actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.4/tests/fixtures/rust-src/rust-toolchain.toml <<'EOF'
           [toolchain]
           channel = "stable"
+          EOF
+          cat > actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.4/tests/fixtures/rust-src/src/main.rs <<'EOF'
+          fn main() { println!("hello"); }
           EOF
       - id: action
         uses: .
         with:
           toolchain: stable
-          rust-src-dir: /tmp/rust-src-subdir
+          rust-src-dir: actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.4/tests/fixtures/rust-src
           cache: "false"
           matcher: "false"
       - name: Assert rustc-version output is set
         env:
           ACTUAL: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "rustc-version: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != rustc* ]]; then
+            echo "FAIL: rustc-version does not start with 'rustc'"
             exit 1
           fi
           echo "PASS"
@@ -34,7 +41,7 @@ jobs:
         env:
           ACTUAL: ${{ steps.action.outputs.cargo-version }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "cargo-version: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: cargo-version output is empty"
             exit 1

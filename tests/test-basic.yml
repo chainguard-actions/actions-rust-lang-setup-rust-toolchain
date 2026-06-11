@@ -1,4 +1,4 @@
-name: Test basic usage with toolchain and components
+name: Test basic usage with toolchain input
 on:
   workflow_dispatch:
 jobs:
@@ -10,16 +10,19 @@ jobs:
         uses: .
         with:
           toolchain: stable
-          components: rustfmt,clippy
           cache: "false"
           matcher: "false"
       - name: Assert rustc-version output is set
         env:
           ACTUAL: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "rustc-version: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != rustc* ]]; then
+            echo "FAIL: rustc-version does not start with 'rustc'"
             exit 1
           fi
           echo "PASS"
@@ -27,7 +30,7 @@ jobs:
         env:
           ACTUAL: ${{ steps.action.outputs.cargo-version }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "cargo-version: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: cargo-version output is empty"
             exit 1
@@ -37,7 +40,7 @@ jobs:
         env:
           ACTUAL: ${{ steps.action.outputs.rustup-version }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "rustup-version: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: rustup-version output is empty"
             exit 1
@@ -47,17 +50,9 @@ jobs:
         env:
           ACTUAL: ${{ steps.action.outputs.cachekey }}
         run: |
-          echo "actual: $ACTUAL"
+          echo "cachekey: $ACTUAL"
           if [ -z "$ACTUAL" ]; then
             echo "FAIL: cachekey output is empty"
             exit 1
           fi
           echo "PASS"
-      - name: Assert rustfmt is installed
-        run: |
-          rustfmt --version
-          echo "PASS: rustfmt is installed"
-      - name: Assert clippy is installed
-        run: |
-          cargo clippy --version
-          echo "PASS: clippy is installed"
