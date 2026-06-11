@@ -1,4 +1,4 @@
-name: Test rust-src-dir input
+name: Test basic usage with toolchain, components, and target
 on:
   workflow_dispatch:
 jobs:
@@ -10,10 +10,11 @@ jobs:
         uses: .
         with:
           toolchain: stable
-          rust-src-dir: actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.2/tests/fixtures/rust-src
+          components: rustfmt,clippy
+          target: x86_64-unknown-linux-gnu
           cache: "false"
-          matcher: "false"
-          rustflags: ""
+          matcher: "true"
+          rustflags: "-D warnings"
           override: "true"
       - name: Assert rustc-version output is set
         env:
@@ -35,6 +36,16 @@ jobs:
             exit 1
           fi
           echo "PASS"
+      - name: Assert rustup-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustup-version }}
+        run: |
+          echo "actual rustup-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustup-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
       - name: Assert cachekey output is set
         env:
           ACTUAL: ${{ steps.action.outputs.cachekey }}
@@ -45,8 +56,15 @@ jobs:
             exit 1
           fi
           echo "PASS"
-      - name: Assert can build in rust-src-dir
-        working-directory: actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.2/tests/fixtures/rust-src
+      - name: Assert rustfmt is installed
         run: |
-          cargo build
-          echo "PASS: cargo build succeeded in rust-src-dir"
+          rustfmt --version
+          echo "PASS: rustfmt is installed"
+      - name: Assert clippy is installed
+        run: |
+          cargo clippy --version
+          echo "PASS: clippy is installed"
+      - name: Assert target is installed
+        run: |
+          rustup target list --installed | grep "x86_64-unknown-linux-gnu"
+          echo "PASS: target x86_64-unknown-linux-gnu is installed"
