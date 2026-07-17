@@ -1,0 +1,52 @@
+name: Test no cache and custom rustflags
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          toolchain: "stable"
+          cache: "false"
+          rustflags: "-D warnings -D unused"
+      - name: Assert RUSTFLAGS is set correctly
+        run: |
+          echo "RUSTFLAGS: $RUSTFLAGS"
+          if [ -z "$RUSTFLAGS" ]; then
+            echo "FAIL: RUSTFLAGS is not set"
+            exit 1
+          fi
+          if [[ "$RUSTFLAGS" != *"-D warnings"* ]]; then
+            echo "FAIL: RUSTFLAGS does not contain '-D warnings', got: $RUSTFLAGS"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert CARGO_TERM_COLOR is set
+        run: |
+          echo "CARGO_TERM_COLOR: $CARGO_TERM_COLOR"
+          if [ -z "$CARGO_TERM_COLOR" ]; then
+            echo "FAIL: CARGO_TERM_COLOR is not set"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert RUST_BACKTRACE is set
+        run: |
+          echo "RUST_BACKTRACE: $RUST_BACKTRACE"
+          if [ -z "$RUST_BACKTRACE" ]; then
+            echo "FAIL: RUST_BACKTRACE is not set"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert rustc-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual rustc-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS"

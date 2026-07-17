@@ -1,0 +1,51 @@
+name: Test specific toolchain version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.80.0"
+          cache: "false"
+      - name: Assert rustc-version contains 1.80.0
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual rustc-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != *"1.80.0"* ]]; then
+            echo "FAIL: rustc-version does not contain '1.80.0', got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cargo-version contains 1.80.0
+        env:
+          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "actual cargo-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != *"1.80.0"* ]]; then
+            echo "FAIL: cargo-version does not contain '1.80.0', got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cachekey is non-empty
+        env:
+          ACTUAL: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "actual cachekey: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: cachekey output is empty"
+            exit 1
+          fi
+          echo "PASS"
