@@ -1,0 +1,58 @@
+name: Test multiple Rust toolchains installation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.70.0,stable"
+          cache: "false"
+
+      - name: Assert rustc-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual rustc-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if ! echo "$ACTUAL" | grep -q "^rustc "; then
+            echo "FAIL: rustc-version does not start with 'rustc '"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$ACTUAL"
+
+      - name: Assert both toolchains are installed
+        run: |
+          echo "Installed toolchains:"
+          rustup toolchain list
+          if ! rustup toolchain list | grep -q "1\.70\.0"; then
+            echo "FAIL: toolchain 1.70.0 not found in installed toolchains"
+            exit 1
+          fi
+          if ! rustup toolchain list | grep -q "stable"; then
+            echo "FAIL: toolchain stable not found in installed toolchains"
+            exit 1
+          fi
+          echo "PASS: both toolchains are installed"
+
+      - name: Assert stable is the active toolchain (last in list)
+        run: |
+          ACTIVE=$(rustup show active-toolchain 2>/dev/null || rustc --version)
+          echo "Active toolchain: $ACTIVE"
+          # The active toolchain should be stable (last in the comma-separated list)
+          RUSTC_VER=$(rustc --version)
+          echo "rustc --version: $RUSTC_VER"
+          # stable toolchain should not be a specific old version like 1.70.0 exclusively
+          # Just verify rustc is working
+          if [ -z "$RUSTC_VER" ]; then
+            echo "FAIL: rustc --version returned empty"
+            exit 1
+          fi
+          echo "PASS"

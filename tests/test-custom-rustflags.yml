@@ -1,4 +1,4 @@
-name: Test Rust toolchain with components
+name: Test Rust toolchain with custom rustflags
 on:
   workflow_dispatch:
 jobs:
@@ -11,8 +11,8 @@ jobs:
         uses: .
         with:
           toolchain: stable
-          components: "clippy,rustfmt"
           cache: "false"
+          rustflags: "-D warnings -D unused-imports"
 
       - name: Assert rustc-version output is set
         env:
@@ -25,20 +25,11 @@ jobs:
           fi
           echo "PASS: rustc-version=$ACTUAL"
 
-      - name: Assert clippy is available
+      - name: Assert RUSTFLAGS env var is set to custom value
         run: |
-          if ! command -v cargo-clippy &>/dev/null && ! rustup component list --installed | grep -q clippy; then
-            echo "FAIL: clippy not found"
+          echo "RUSTFLAGS=$RUSTFLAGS"
+          if [ "$RUSTFLAGS" != "-D warnings -D unused-imports" ]; then
+            echo "FAIL: expected RUSTFLAGS='-D warnings -D unused-imports', got: $RUSTFLAGS"
             exit 1
           fi
-          echo "PASS: clippy is available"
-          cargo clippy --version
-
-      - name: Assert rustfmt is available
-        run: |
-          if ! command -v rustfmt &>/dev/null; then
-            echo "FAIL: rustfmt not found on PATH"
-            exit 1
-          fi
-          echo "PASS: rustfmt found at $(which rustfmt)"
-          rustfmt --version
+          echo "PASS"

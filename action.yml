@@ -129,25 +129,19 @@ runs:
       shell: bash
       run: |
         : construct rustup command line
-        _srt_targets_val=""
-        if [[ -n "$_srt_targets" ]]; then
-          IFS=',' read -ra _srt_tgt_arr <<< "$_srt_targets"
-          for t in "${_srt_tgt_arr[@]}"; do _srt_targets_val="${_srt_targets_val} --target $t"; done
-        fi
-        _srt_safe_targets=$(printf '%s' "$_srt_targets_val" | tr -d '\n\r')
-        echo "targets=${_srt_safe_targets}" >> "$GITHUB_OUTPUT"
-        _srt_components_val=""
-        if [[ -n "$_srt_components" ]]; then
-          IFS=',' read -ra _srt_comp_arr <<< "$_srt_components"
-          for c in "${_srt_comp_arr[@]}"; do _srt_components_val="${_srt_components_val} --component $c"; done
-        fi
-        _srt_safe_components=$(printf '%s' "$_srt_components_val" | tr -d '\n\r')
-        echo "components=${_srt_safe_components}" >> "$GITHUB_OUTPUT"
+        _srt_targets_val=$(IFS=,; read -ra _srt_t_arr <<< "$_srt_targets"; for t in "${_srt_t_arr[@]}"; do printf ' --target %s' "$t"; done)
+        _srt_targets_safe=$(printf '%s' "$_srt_targets_val" | tr -d '\n\r')
+        echo "targets=$_srt_targets_safe" >> "$GITHUB_OUTPUT"
+        _srt_components_val=$(IFS=,; read -ra _srt_c_arr <<< "$_srt_components"; for c in "${_srt_c_arr[@]}"; do printf ' --component %s' "$c"; done)
+        _srt_components_safe=$(printf '%s' "$_srt_components_val" | tr -d '\n\r')
+        echo "components=$_srt_components_safe" >> "$GITHUB_OUTPUT"
         if [[ "$_srt_toolchain" == *nightly* && -n "$_srt_components" ]]; then
-          echo "downgrade= --allow-downgrade" >> "$GITHUB_OUTPUT"
+          _srt_downgrade=' --allow-downgrade'
         else
-          echo "downgrade=" >> "$GITHUB_OUTPUT"
+          _srt_downgrade=''
         fi
+        _srt_downgrade_safe=$(printf '%s' "$_srt_downgrade" | tr -d '\n\r')
+        echo "downgrade=$_srt_downgrade_safe" >> "$GITHUB_OUTPUT"
     # The environment variables always need to be set before the caching action
     - name: Setting Environment Variables
       env:
@@ -166,9 +160,9 @@ runs:
         if [[ ! -v RUST_BACKTRACE ]]; then
           echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
         fi
-        if [[ ( ! -v RUSTFLAGS ) && $_srt_NEW_RUSTFLAGS != "" ]]; then
-          _srt_SAFE_RUSTFLAGS=$(printf '%s' "$_srt_NEW_RUSTFLAGS" | tr -d '\n\r')
-          echo "RUSTFLAGS=$_srt_SAFE_RUSTFLAGS" >> $GITHUB_ENV
+        if [[ ( ! -v RUSTFLAGS ) && "$_srt_NEW_RUSTFLAGS" != "" ]]; then
+          _srt_RUSTFLAGS_safe=$(printf '%s' "$_srt_NEW_RUSTFLAGS" | tr -d '\n\r')
+          echo "RUSTFLAGS=$_srt_RUSTFLAGS_safe" >> "$GITHUB_ENV"
         fi
         # Enable faster sparse index on nightly
         # The value is ignored on stable and causes no problems
@@ -184,22 +178,22 @@ runs:
       env:
         _srt_action_path: ${{ github.action_path }}
       shell: bash
-      run: echo "::add-matcher::${_srt_action_path}/rust.json"
+      run: |
+        _srt_action_path_safe=$(printf '%s' "$_srt_action_path" | tr -d '\n\r')
+        echo "::add-matcher::${_srt_action_path_safe}/rust.json"
     - name: Install rustup, if needed
       shell: bash
       run: |
         if ! command -v rustup &> /dev/null ; then
-          _srt_rustup_installer="$(mktemp /tmp/rustup-init.XXXXXXXXXX.sh)"
-          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o "$_srt_rustup_installer"
-          chmod +x "$_srt_rustup_installer"
-          "$_srt_rustup_installer" --default-toolchain none -y
-          rm -f "$_srt_rustup_installer"
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o /tmp/rustup-init.sh
+          sh /tmp/rustup-init.sh --default-toolchain none -y
+          rm -f /tmp/rustup-init.sh
 
           # Resolve the correct CARGO_HOME path depending on OS
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "${CARGO_HOME:-$USERPROFILE/.cargo}/bin" | sed 's|/|\\|g' >> $GITHUB_PATH
+            echo "${CARGO_HOME:-$USERPROFILE/.cargo}/bin" | sed 's|/|\\|g' >> "$GITHUB_PATH"
           else
-            echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
+            echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
           fi
         fi
       env:
@@ -237,11 +231,11 @@ runs:
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
           if [[ -n "$_srt_components" ]]; then
-            IFS=',' read -ra _srt_comp_arr <<< "$_srt_components"
+            IFS=, read -ra _srt_comp_arr <<< "$_srt_components"
             rustup component add "${_srt_comp_arr[@]}"
           fi
           if [[ -n "$_srt_targets" ]]; then
-            IFS=',' read -ra _srt_tgt_arr <<< "$_srt_targets"
+            IFS=, read -ra _srt_tgt_arr <<< "$_srt_targets"
             rustup target add "${_srt_tgt_arr[@]}"
           fi
         else
@@ -249,17 +243,16 @@ runs:
           then
             _srt_toolchain=stable
           fi
-          # Build the toolchain list as an array to keep each token separate
-          IFS=',' read -ra _srt_tc_arr <<< "$_srt_toolchain"
-          # Split space-separated flag strings into arrays safely
-          read -ra _srt_arr_targets <<< "$_srt_flags_targets"
-          read -ra _srt_arr_components <<< "$_srt_flags_components"
-          _srt_extra_args=("${_srt_arr_targets[@]}" "${_srt_arr_components[@]}" --profile "minimal${_srt_flags_downgrade}" --no-self-update)
-          rustup toolchain install "${_srt_tc_arr[@]}" "${_srt_extra_args[@]}"
+          IFS=, read -ra _srt_tc_arr <<< "$_srt_toolchain"
+          read -ra _srt_ft_arr <<< "$_srt_flags_targets"
+          read -ra _srt_fc_arr <<< "$_srt_flags_components"
+          read -ra _srt_fd_arr <<< "$_srt_flags_downgrade"
+          rustup toolchain install "${_srt_tc_arr[@]}" "${_srt_ft_arr[@]}" "${_srt_fc_arr[@]}" --profile minimal "${_srt_fd_arr[@]}" --no-self-update
           # Take the last element from the list
           if [[ "$_srt_override" == "true" ]]
           then
-            rustup override set "${_srt_tc_arr[-1]}"
+            _srt_last_toolchain="${_srt_toolchain##*,}"
+            rustup override set "$_srt_last_toolchain"
           fi
         fi
     - id: versions
@@ -289,7 +282,7 @@ runs:
         # If we detect an incompatible value, set it to "git" which is always supported.
         if [[ "$_srt_rustc_version" =~ ^rustc\ (1\.6[67]\.|1\.68\.0-nightly) && "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL}" == "sparse" ]]; then
           echo "Downgrade cargo registry protocol to git"
-          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> $GITHUB_ENV
+          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> "$GITHUB_ENV"
         fi
     - name: Setup Rust Caching
       if: inputs.cache == 'true'

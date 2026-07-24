@@ -1,4 +1,4 @@
-name: Test basic usage - default stable toolchain
+name: Test basic stable toolchain setup
 on:
   workflow_dispatch:
 jobs:
@@ -6,10 +6,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - id: action
         uses: .
         with:
+          toolchain: stable
           cache: "false"
+
       - name: Assert rustc-version output is set
         env:
           ACTUAL: ${{ steps.action.outputs.rustc-version }}
@@ -19,11 +22,12 @@ jobs:
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
-          if [[ "$ACTUAL" != rustc* ]]; then
-            echo "FAIL: rustc-version does not start with 'rustc'"
+          if ! echo "$ACTUAL" | grep -q "^rustc "; then
+            echo "FAIL: rustc-version does not start with 'rustc '"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: rustc-version=$ACTUAL"
+
       - name: Assert cargo-version output is set
         env:
           ACTUAL: ${{ steps.action.outputs.cargo-version }}
@@ -33,11 +37,12 @@ jobs:
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          if [[ "$ACTUAL" != cargo* ]]; then
-            echo "FAIL: cargo-version does not start with 'cargo'"
+          if ! echo "$ACTUAL" | grep -q "^cargo "; then
+            echo "FAIL: cargo-version does not start with 'cargo '"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: cargo-version=$ACTUAL"
+
       - name: Assert rustup-version output is set
         env:
           ACTUAL: ${{ steps.action.outputs.rustup-version }}
@@ -47,11 +52,12 @@ jobs:
             echo "FAIL: rustup-version output is empty"
             exit 1
           fi
-          if [[ "$ACTUAL" != rustup* ]]; then
-            echo "FAIL: rustup-version does not start with 'rustup'"
+          if ! echo "$ACTUAL" | grep -q "rustup"; then
+            echo "FAIL: rustup-version does not contain 'rustup'"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: rustup-version=$ACTUAL"
+
       - name: Assert cachekey output is set
         env:
           ACTUAL: ${{ steps.action.outputs.cachekey }}
@@ -61,20 +67,20 @@ jobs:
             echo "FAIL: cachekey output is empty"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert rustc is available
+          echo "PASS: cachekey=$ACTUAL"
+
+      - name: Assert rustc is available on PATH
         run: |
-          rustc --version
-          if [ $? -ne 0 ]; then
-            echo "FAIL: rustc is not available"
+          if ! command -v rustc &>/dev/null; then
+            echo "FAIL: rustc not found on PATH"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert cargo is available
+          echo "PASS: rustc found at $(which rustc)"
+
+      - name: Assert cargo is available on PATH
         run: |
-          cargo --version
-          if [ $? -ne 0 ]; then
-            echo "FAIL: cargo is not available"
+          if ! command -v cargo &>/dev/null; then
+            echo "FAIL: cargo not found on PATH"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: cargo found at $(which cargo)"

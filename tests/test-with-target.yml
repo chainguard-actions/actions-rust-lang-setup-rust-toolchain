@@ -1,4 +1,4 @@
-name: Test Rust toolchain with components
+name: Test Rust toolchain with target triple
 on:
   workflow_dispatch:
 jobs:
@@ -11,7 +11,7 @@ jobs:
         uses: .
         with:
           toolchain: stable
-          components: "clippy,rustfmt"
+          target: "x86_64-unknown-linux-musl"
           cache: "false"
 
       - name: Assert rustc-version output is set
@@ -25,20 +25,12 @@ jobs:
           fi
           echo "PASS: rustc-version=$ACTUAL"
 
-      - name: Assert clippy is available
+      - name: Assert target is installed
         run: |
-          if ! command -v cargo-clippy &>/dev/null && ! rustup component list --installed | grep -q clippy; then
-            echo "FAIL: clippy not found"
+          echo "Installed targets:"
+          rustup target list --installed
+          if ! rustup target list --installed | grep -q "x86_64-unknown-linux-musl"; then
+            echo "FAIL: target x86_64-unknown-linux-musl not found in installed targets"
             exit 1
           fi
-          echo "PASS: clippy is available"
-          cargo clippy --version
-
-      - name: Assert rustfmt is available
-        run: |
-          if ! command -v rustfmt &>/dev/null; then
-            echo "FAIL: rustfmt not found on PATH"
-            exit 1
-          fi
-          echo "PASS: rustfmt found at $(which rustfmt)"
-          rustfmt --version
+          echo "PASS: target x86_64-unknown-linux-musl is installed"

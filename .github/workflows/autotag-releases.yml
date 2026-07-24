@@ -6,7 +6,8 @@ on:
   release:
     types: [released]
   workflow_dispatch:
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   autotag_release:
@@ -19,7 +20,9 @@ jobs:
       - name: Get version from tag
         id: tag_name
         run: |
-          echo "current_version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          raw_version="${GITHUB_REF#refs/tags/}"
+          safe_version="$(printf '%s' "$raw_version" | tr -d '\n\r')"
+          echo "current_version=${safe_version}" >> "$GITHUB_OUTPUT"
         shell: bash
       - name: Create and push tags
         env:

@@ -57,17 +57,17 @@ jobs:
           toolchain: ${{matrix.rust}}
           components: clippy
 
-      - name: Check ${{ '${{steps.toolchain.outputs.rustc-version}}' }}
+      - name: Check rustc-version
         env:
           RUSTC_VERSION: ${{steps.toolchain.outputs.rustc-version}}
         run: echo "$RUSTC_VERSION"
 
-      - name: Check ${{ '${{steps.toolchain.outputs.cargo-version}}' }}
+      - name: Check cargo-version
         env:
           CARGO_VERSION: ${{steps.toolchain.outputs.cargo-version}}
         run: echo "$CARGO_VERSION"
 
-      - name: Check ${{ '${{steps.toolchain.outputs.rustup-version}}' }}
+      - name: Check rustup-version
         env:
           RUSTUP_VERSION: ${{steps.toolchain.outputs.rustup-version}}
         run: echo "$RUSTUP_VERSION"

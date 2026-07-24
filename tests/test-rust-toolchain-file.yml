@@ -1,0 +1,53 @@
+name: Test Rust toolchain from rust-toolchain.toml file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create rust-toolchain.toml file
+        run: |
+          cat > rust-toolchain.toml << 'EOF'
+          [toolchain]
+          channel = "1.71.0"
+          components = ["rustfmt", "clippy"]
+          EOF
+          echo "Created rust-toolchain.toml:"
+          cat rust-toolchain.toml
+
+      - id: action
+        uses: .
+        with:
+          # No toolchain input - should use rust-toolchain.toml
+          cache: "false"
+
+      - name: Assert rustc-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual rustc-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if ! echo "$ACTUAL" | grep -q "^rustc "; then
+            echo "FAIL: rustc-version does not start with 'rustc '"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$ACTUAL"
+
+      - name: Assert rustc version matches rust-toolchain.toml
+        run: |
+          VERSION=$(rustc --version)
+          echo "rustc --version: $VERSION"
+          if ! echo "$VERSION" | grep -q "1\.71\.0"; then
+            echo "FAIL: expected version 1.71.0 from rust-toolchain.toml, got: $VERSION"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Cleanup rust-toolchain.toml
+        if: always()
+        run: rm -f rust-toolchain.toml

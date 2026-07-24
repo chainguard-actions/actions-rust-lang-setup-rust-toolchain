@@ -1,0 +1,56 @@
+name: Test specific Rust toolchain version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.70.0"
+          cache: "false"
+
+      - name: Assert rustc-version contains 1.70.0
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual rustc-version: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if ! echo "$ACTUAL" | grep -q "1\.70\.0"; then
+            echo "FAIL: rustc-version does not contain '1.70.0', got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$ACTUAL"
+
+      - name: Assert rustc binary reports correct version
+        run: |
+          VERSION=$(rustc --version)
+          echo "rustc --version: $VERSION"
+          if ! echo "$VERSION" | grep -q "1\.70\.0"; then
+            echo "FAIL: rustc binary does not report version 1.70.0, got: $VERSION"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert cachekey is non-empty and 12 chars
+        env:
+          ACTUAL: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "actual cachekey: $ACTUAL"
+          LEN=${#ACTUAL}
+          echo "cachekey length: $LEN"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: cachekey is empty"
+            exit 1
+          fi
+          if [ "$LEN" -ne 12 ]; then
+            echo "FAIL: cachekey length is $LEN, expected 12"
+            exit 1
+          fi
+          echo "PASS: cachekey=$ACTUAL"
