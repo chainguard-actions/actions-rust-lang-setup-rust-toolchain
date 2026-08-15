@@ -1,0 +1,46 @@
+name: Test cachekey output format
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          cache: "false"
+
+      - name: Assert cachekey is 12 characters
+        env:
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "cachekey: $CACHEKEY"
+          if [ -z "$CACHEKEY" ]; then
+            echo "FAIL: cachekey output is empty"
+            exit 1
+          fi
+          LEN=${#CACHEKEY}
+          echo "cachekey length: $LEN"
+          if [ "$LEN" != "12" ]; then
+            echo "FAIL: cachekey should be 12 characters, got: $LEN"
+            exit 1
+          fi
+          echo "PASS: cachekey is 12 characters"
+
+      - name: Assert cachekey starts with a date-like prefix
+        env:
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "cachekey: $CACHEKEY"
+          # cachekey format is YYYYMMDD + first 4 chars of commit hash
+          # The first 8 chars should be a valid date (20YYMMDD)
+          DATE_PART="${CACHEKEY:0:8}"
+          echo "date part: $DATE_PART"
+          if ! echo "$DATE_PART" | grep -qE '^20[0-9]{6}$'; then
+            echo "FAIL: cachekey date part '$DATE_PART' does not match expected format 20YYMMDD"
+            exit 1
+          fi
+          echo "PASS: cachekey has valid date prefix"

@@ -1,0 +1,36 @@
+name: Test cache-directories input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create extra cache directory
+        run: mkdir -p /tmp/extra-cache-dir
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          cache: "true"
+          cache-directories: /tmp/extra-cache-dir
+      - name: Assert rustc-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cargo-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          echo "PASS"

@@ -1,0 +1,57 @@
+name: Test specific toolchain version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.70.0"
+          cache: "false"
+
+      - name: Assert rustc-version contains 1.70.0
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $ACTUAL"
+          if [[ "$ACTUAL" != *"1.70.0"* ]]; then
+            echo "FAIL: expected rustc-version to contain '1.70.0', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert cargo-version contains 1.70.0
+        env:
+          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "cargo-version: $ACTUAL"
+          if [[ "$ACTUAL" != *"1.70.0"* ]]; then
+            echo "FAIL: expected cargo-version to contain '1.70.0', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert cachekey is non-empty
+        env:
+          ACTUAL: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "cachekey: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: cachekey output is empty"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert rustc 1.70.0 is active
+        run: |
+          VERSION=$(rustc --version)
+          echo "Active rustc: $VERSION"
+          if [[ "$VERSION" != *"1.70.0"* ]]; then
+            echo "FAIL: expected active rustc to be 1.70.0, got '$VERSION'"
+            exit 1
+          fi
+          echo "PASS"
