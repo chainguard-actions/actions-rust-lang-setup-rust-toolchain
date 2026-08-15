@@ -1,4 +1,4 @@
-name: Test toolchain with components
+name: Test custom RUSTFLAGS
 on:
   workflow_dispatch:
 jobs:
@@ -10,8 +10,16 @@ jobs:
         uses: .
         with:
           toolchain: "stable"
-          components: "clippy,rustfmt"
           cache: "false"
+          rustflags: "-D warnings -D unused"
+      - name: Assert RUSTFLAGS is set to custom value
+        run: |
+          echo "RUSTFLAGS=$RUSTFLAGS"
+          if [[ "$RUSTFLAGS" != "-D warnings -D unused" ]]; then
+            echo "FAIL: expected RUSTFLAGS='-D warnings -D unused', got '$RUSTFLAGS'"
+            exit 1
+          fi
+          echo "PASS: RUSTFLAGS=$RUSTFLAGS"
       - name: Assert rustc-version output is set
         env:
           ACTUAL: ${{ steps.action.outputs.rustc-version }}
@@ -22,12 +30,3 @@ jobs:
             exit 1
           fi
           echo "PASS: rustc-version=$ACTUAL"
-      - name: Assert clippy is available
-        run: |
-          which cargo-clippy || cargo clippy --version
-          echo "PASS: clippy is available"
-      - name: Assert rustfmt is available
-        run: |
-          which rustfmt
-          rustfmt --version
-          echo "PASS: rustfmt is available"

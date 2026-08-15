@@ -1,0 +1,57 @@
+name: Test specific toolchain version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          toolchain: "stable"
+          cache: "false"
+      - name: Assert rustc-version output starts with rustc
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != rustc* ]]; then
+            echo "FAIL: rustc-version does not start with 'rustc', got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$ACTUAL"
+      - name: Assert cargo-version output starts with cargo
+        env:
+          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != cargo* ]]; then
+            echo "FAIL: cargo-version does not start with 'cargo', got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: cargo-version=$ACTUAL"
+      - name: Assert cachekey is 12 chars
+        env:
+          ACTUAL: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "actual: $ACTUAL"
+          LEN=${#ACTUAL}
+          echo "length: $LEN"
+          if [[ $LEN -ne 12 ]]; then
+            echo "FAIL: expected cachekey length 12, got $LEN"
+            exit 1
+          fi
+          echo "PASS: cachekey=$ACTUAL"
+      - name: Assert rustc is available
+        run: |
+          rustc --version
+          echo "PASS"

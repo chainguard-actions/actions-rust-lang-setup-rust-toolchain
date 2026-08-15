@@ -1,0 +1,37 @@
+name: Test empty RUSTFLAGS (no override)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          toolchain: "stable"
+          cache: "false"
+          rustflags: ""
+      - name: Assert RUSTFLAGS is not set to -D warnings
+        run: |
+          echo "RUSTFLAGS='$RUSTFLAGS'"
+          # When rustflags is empty string, the action should NOT set RUSTFLAGS
+          if [[ "$RUSTFLAGS" == "-D warnings" ]]; then
+            echo "FAIL: RUSTFLAGS should not be set to '-D warnings' when rustflags input is empty"
+            exit 1
+          fi
+          echo "PASS: RUSTFLAGS is not '-D warnings'"
+      - name: Assert rustc is available
+        run: |
+          rustc --version
+          echo "PASS: rustc is available"
+      - name: Assert rustc-version output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$ACTUAL"

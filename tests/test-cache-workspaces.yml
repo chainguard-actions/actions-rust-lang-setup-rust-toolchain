@@ -1,0 +1,34 @@
+name: Test cache-workspaces input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          cache: "true"
+          cache-workspaces: ". -> target"
+      - name: Assert rustc-version output is set
+        env:
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cargo-version output is set
+        env:
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "cargo-version: $CARGO_VERSION"
+          if [ -z "$CARGO_VERSION" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          echo "PASS"

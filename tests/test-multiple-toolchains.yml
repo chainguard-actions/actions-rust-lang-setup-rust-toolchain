@@ -1,0 +1,62 @@
+name: Test multiple Rust toolchains installation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          # Install two toolchains; the last one (1.75.0) becomes the default
+          toolchain: "1.70.0,1.75.0"
+          cache: "false"
+
+      - name: Assert rustc-version output is set
+        env:
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$RUSTC_VERSION"
+
+      - name: Assert default toolchain is the last one (1.75.0)
+        env:
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $RUSTC_VERSION"
+          if ! echo "$RUSTC_VERSION" | grep -q "1\.75\.0"; then
+            echo "FAIL: expected default toolchain to be 1.75.0 (last in list), got: $RUSTC_VERSION"
+            exit 1
+          fi
+          echo "PASS: default toolchain is 1.75.0 (last in list)"
+
+      - name: Assert both toolchains are installed
+        run: |
+          # Check that 1.70.0 is installed
+          rustup toolchain list | grep "1.70.0" || {
+            echo "FAIL: toolchain 1.70.0 not found in rustup toolchain list"
+            exit 1
+          }
+          # Check that 1.75.0 is installed
+          rustup toolchain list | grep "1.75.0" || {
+            echo "FAIL: toolchain 1.75.0 not found in rustup toolchain list"
+            exit 1
+          }
+          echo "PASS: both toolchains are installed"
+
+      - name: Assert cachekey output is set
+        env:
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "cachekey: $CACHEKEY"
+          if [ -z "$CACHEKEY" ]; then
+            echo "FAIL: cachekey output is empty"
+            exit 1
+          fi
+          echo "PASS: cachekey=$CACHEKEY"

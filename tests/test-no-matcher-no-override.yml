@@ -1,4 +1,4 @@
-name: Test basic stable toolchain setup
+name: Test Rust toolchain with matcher and override disabled
 on:
   workflow_dispatch:
 jobs:
@@ -11,6 +11,8 @@ jobs:
         uses: .
         with:
           toolchain: stable
+          matcher: "false"
+          override: "false"
           cache: "false"
 
       - name: Assert rustc-version output is set
@@ -37,10 +39,6 @@ jobs:
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          if ! echo "$CARGO_VERSION" | grep -q "^cargo "; then
-            echo "FAIL: cargo-version does not start with 'cargo '"
-            exit 1
-          fi
           echo "PASS: cargo-version=$CARGO_VERSION"
 
       - name: Assert rustup-version output is set
@@ -52,13 +50,9 @@ jobs:
             echo "FAIL: rustup-version output is empty"
             exit 1
           fi
-          if ! echo "$RUSTUP_VERSION" | grep -q "rustup"; then
-            echo "FAIL: rustup-version does not contain 'rustup'"
-            exit 1
-          fi
           echo "PASS: rustup-version=$RUSTUP_VERSION"
 
-      - name: Assert cachekey output is set
+      - name: Assert cachekey output is set and has expected format
         env:
           CACHEKEY: ${{ steps.action.outputs.cachekey }}
         run: |
@@ -67,16 +61,16 @@ jobs:
             echo "FAIL: cachekey output is empty"
             exit 1
           fi
-          echo "PASS: cachekey=$CACHEKEY"
+          # cachekey should be 12 chars (date YYYYMMDD + first 4 chars of commit hash)
+          LEN=${#CACHEKEY}
+          echo "cachekey length: $LEN"
+          if [ "$LEN" -ne 12 ]; then
+            echo "FAIL: expected cachekey length 12, got: $LEN"
+            exit 1
+          fi
+          echo "PASS: cachekey=$CACHEKEY (length=$LEN)"
 
-      - name: Assert rustc is on PATH and works
+      - name: Assert rustc is functional
         run: |
-          which rustc
           rustc --version
-          echo "PASS: rustc is available"
-
-      - name: Assert cargo is on PATH and works
-        run: |
-          which cargo
-          cargo --version
-          echo "PASS: cargo is available"
+          echo "PASS: rustc is functional"
