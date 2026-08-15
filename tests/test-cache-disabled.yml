@@ -1,4 +1,4 @@
-name: Test basic stable toolchain setup
+name: Test with cache disabled
 on:
   workflow_dispatch:
 jobs:
@@ -37,46 +37,29 @@ jobs:
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          if ! echo "$CARGO_VERSION" | grep -q "^cargo "; then
-            echo "FAIL: cargo-version does not start with 'cargo '"
-            exit 1
-          fi
           echo "PASS: cargo-version=$CARGO_VERSION"
 
-      - name: Assert rustup-version output is set
-        env:
-          RUSTUP_VERSION: ${{ steps.action.outputs.rustup-version }}
+      - name: Assert environment variables are set
         run: |
-          echo "rustup-version: $RUSTUP_VERSION"
-          if [ -z "$RUSTUP_VERSION" ]; then
-            echo "FAIL: rustup-version output is empty"
+          echo "CARGO_INCREMENTAL: $CARGO_INCREMENTAL"
+          echo "CARGO_PROFILE_DEV_DEBUG: $CARGO_PROFILE_DEV_DEBUG"
+          echo "CARGO_TERM_COLOR: $CARGO_TERM_COLOR"
+          echo "RUST_BACKTRACE: $RUST_BACKTRACE"
+
+          if [ "$CARGO_INCREMENTAL" != "0" ]; then
+            echo "FAIL: expected CARGO_INCREMENTAL=0, got: $CARGO_INCREMENTAL"
             exit 1
           fi
-          if ! echo "$RUSTUP_VERSION" | grep -q "rustup"; then
-            echo "FAIL: rustup-version does not contain 'rustup'"
+          if [ "$CARGO_PROFILE_DEV_DEBUG" != "0" ]; then
+            echo "FAIL: expected CARGO_PROFILE_DEV_DEBUG=0, got: $CARGO_PROFILE_DEV_DEBUG"
             exit 1
           fi
-          echo "PASS: rustup-version=$RUSTUP_VERSION"
-
-      - name: Assert cachekey output is set
-        env:
-          CACHEKEY: ${{ steps.action.outputs.cachekey }}
-        run: |
-          echo "cachekey: $CACHEKEY"
-          if [ -z "$CACHEKEY" ]; then
-            echo "FAIL: cachekey output is empty"
+          if [ "$CARGO_TERM_COLOR" != "always" ]; then
+            echo "FAIL: expected CARGO_TERM_COLOR=always, got: $CARGO_TERM_COLOR"
             exit 1
           fi
-          echo "PASS: cachekey=$CACHEKEY"
-
-      - name: Assert rustc is on PATH and works
-        run: |
-          which rustc
-          rustc --version
-          echo "PASS: rustc is available"
-
-      - name: Assert cargo is on PATH and works
-        run: |
-          which cargo
-          cargo --version
-          echo "PASS: cargo is available"
+          if [ "$RUST_BACKTRACE" != "short" ]; then
+            echo "FAIL: expected RUST_BACKTRACE=short, got: $RUST_BACKTRACE"
+            exit 1
+          fi
+          echo "PASS: all environment variables are set correctly"

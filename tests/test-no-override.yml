@@ -1,0 +1,50 @@
+name: Test override disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.70.0"
+          override: "false"
+          cache: "false"
+
+      - name: Assert rustc-version output is set
+        env:
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$RUSTC_VERSION"
+
+      - name: Assert toolchain is installed but no directory override set
+        run: |
+          # With override=false, rustup override should not be set for this directory
+          OVERRIDE_LIST=$(rustup override list)
+          echo "rustup override list: $OVERRIDE_LIST"
+          CURRENT_DIR=$(pwd)
+          echo "current dir: $CURRENT_DIR"
+          # The override list should not contain the current directory
+          if echo "$OVERRIDE_LIST" | grep -q "$CURRENT_DIR"; then
+            echo "FAIL: rustup override was set for current directory despite override=false"
+            exit 1
+          fi
+          echo "PASS: no rustup override set for current directory"
+
+      - name: Assert 1.70.0 toolchain is installed
+        run: |
+          TOOLCHAINS=$(rustup toolchain list)
+          echo "installed toolchains: $TOOLCHAINS"
+          if ! echo "$TOOLCHAINS" | grep -q "1\.70\.0"; then
+            echo "FAIL: 1.70.0 toolchain not found in installed toolchains"
+            exit 1
+          fi
+          echo "PASS: 1.70.0 toolchain is installed"

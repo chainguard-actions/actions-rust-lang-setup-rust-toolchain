@@ -1,0 +1,33 @@
+# Create tags with only major or major.minor version
+# This runs for every created release. Releases are expected to use vmajor.minor.patch as tags.
+
+name: Autotag Release
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+permissions: {}
+
+jobs:
+  autotag_release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Get version from tag
+        id: tag_name
+        run: |
+          echo "current_version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        shell: bash
+      - name: Create and push tags
+        env:
+          CURRENT_VERSION: ${{ steps.tag_name.outputs.current_version }}
+        run: |
+          MINOR="$(echo -n "$CURRENT_VERSION" | cut -d. -f1-2)"
+          MAJOR="$(echo -n "$CURRENT_VERSION" | cut -d. -f1)"
+          git tag -f "${MINOR}"
+          git tag -f "${MAJOR}"
+          git push -f origin "${MINOR}"
+          git push -f origin "${MAJOR}"

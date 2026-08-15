@@ -1,0 +1,50 @@
+name: Test custom RUSTFLAGS
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          rustflags: "-D warnings -D unused-imports"
+          cache: "false"
+
+      - name: Assert RUSTFLAGS is set correctly
+        run: |
+          echo "RUSTFLAGS: $RUSTFLAGS"
+          if [ -z "$RUSTFLAGS" ]; then
+            echo "FAIL: RUSTFLAGS is not set"
+            exit 1
+          fi
+          if ! echo "$RUSTFLAGS" | grep -q "\-D warnings"; then
+            echo "FAIL: RUSTFLAGS does not contain '-D warnings', got: $RUSTFLAGS"
+            exit 1
+          fi
+          if ! echo "$RUSTFLAGS" | grep -q "\-D unused-imports"; then
+            echo "FAIL: RUSTFLAGS does not contain '-D unused-imports', got: $RUSTFLAGS"
+            exit 1
+          fi
+          echo "PASS: RUSTFLAGS=$RUSTFLAGS"
+
+      - name: Assert CARGO_INCREMENTAL is set to 0
+        run: |
+          echo "CARGO_INCREMENTAL: $CARGO_INCREMENTAL"
+          if [ "$CARGO_INCREMENTAL" != "0" ]; then
+            echo "FAIL: expected CARGO_INCREMENTAL=0, got: $CARGO_INCREMENTAL"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert CARGO_TERM_COLOR is set
+        run: |
+          echo "CARGO_TERM_COLOR: $CARGO_TERM_COLOR"
+          if [ -z "$CARGO_TERM_COLOR" ]; then
+            echo "FAIL: CARGO_TERM_COLOR is not set"
+            exit 1
+          fi
+          echo "PASS: CARGO_TERM_COLOR=$CARGO_TERM_COLOR"
