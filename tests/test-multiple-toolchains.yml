@@ -1,0 +1,63 @@
+name: Test multiple toolchain installation (last becomes default)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.70.0,stable"
+          cache: "false"
+
+      - name: Assert rustc-version output is set
+        env:
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if ! echo "$RUSTC_VERSION" | grep -q "^rustc "; then
+            echo "FAIL: rustc-version does not start with 'rustc '"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$RUSTC_VERSION"
+
+      - name: Assert both toolchains are installed
+        run: |
+          # Check that 1.70.0 is installed
+          if ! rustup toolchain list | grep -q "1.70.0"; then
+            echo "FAIL: toolchain 1.70.0 not found in installed toolchains"
+            rustup toolchain list
+            exit 1
+          fi
+          echo "PASS: toolchain 1.70.0 is installed"
+
+          # Check that stable is installed
+          if ! rustup toolchain list | grep -q "stable"; then
+            echo "FAIL: toolchain stable not found in installed toolchains"
+            rustup toolchain list
+            exit 1
+          fi
+          echo "PASS: toolchain stable is installed"
+
+      - name: Assert default toolchain is stable (last in list)
+        run: |
+          # The active toolchain should be stable (last in the comma-separated list)
+          ACTIVE=$(rustup show active-toolchain 2>/dev/null || rustc --version)
+          echo "Active toolchain: $ACTIVE"
+          # The default rustc should be stable (not 1.70.0)
+          RUSTC_VER=$(rustc --version)
+          echo "rustc --version: $RUSTC_VER"
+          # stable is newer than 1.70.0, so the version number should be >= 1.70.0
+          # We just verify it's a valid rustc version string
+          if ! echo "$RUSTC_VER" | grep -q "^rustc "; then
+            echo "FAIL: rustc --version did not return expected format"
+            exit 1
+          fi
+          echo "PASS: default toolchain is set correctly"

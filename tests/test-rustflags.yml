@@ -1,0 +1,51 @@
+name: Test custom RUSTFLAGS and environment variables
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          rustflags: "-D warnings -D unused"
+          cache: "false"
+
+      - name: Assert RUSTFLAGS is set correctly
+        run: |
+          echo "RUSTFLAGS: $RUSTFLAGS"
+          if [ "$RUSTFLAGS" != "-D warnings -D unused" ]; then
+            echo "FAIL: expected RUSTFLAGS='-D warnings -D unused', got: '$RUSTFLAGS'"
+            exit 1
+          fi
+          echo "PASS: RUSTFLAGS is set correctly"
+
+      - name: Assert CARGO_INCREMENTAL is set to 0
+        run: |
+          echo "CARGO_INCREMENTAL: $CARGO_INCREMENTAL"
+          if [ "$CARGO_INCREMENTAL" != "0" ]; then
+            echo "FAIL: expected CARGO_INCREMENTAL=0, got: '$CARGO_INCREMENTAL'"
+            exit 1
+          fi
+          echo "PASS: CARGO_INCREMENTAL=0"
+
+      - name: Assert CARGO_TERM_COLOR is set
+        run: |
+          echo "CARGO_TERM_COLOR: $CARGO_TERM_COLOR"
+          if [ "$CARGO_TERM_COLOR" != "always" ]; then
+            echo "FAIL: expected CARGO_TERM_COLOR=always, got: '$CARGO_TERM_COLOR'"
+            exit 1
+          fi
+          echo "PASS: CARGO_TERM_COLOR=always"
+
+      - name: Assert RUST_BACKTRACE is set
+        run: |
+          echo "RUST_BACKTRACE: $RUST_BACKTRACE"
+          if [ "$RUST_BACKTRACE" != "short" ]; then
+            echo "FAIL: expected RUST_BACKTRACE=short, got: '$RUST_BACKTRACE'"
+            exit 1
+          fi
+          echo "PASS: RUST_BACKTRACE=short"

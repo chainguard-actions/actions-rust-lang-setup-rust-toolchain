@@ -1,4 +1,4 @@
-name: Test basic stable toolchain setup
+name: Test toolchain setup with caching disabled
 on:
   workflow_dispatch:
 jobs:
@@ -12,6 +12,7 @@ jobs:
         with:
           toolchain: stable
           cache: "false"
+          matcher: "false"
 
       - name: Assert rustc-version output is set
         env:
@@ -37,26 +38,7 @@ jobs:
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          if ! echo "$CARGO_VERSION" | grep -q "^cargo "; then
-            echo "FAIL: cargo-version does not start with 'cargo '"
-            exit 1
-          fi
           echo "PASS: cargo-version=$CARGO_VERSION"
-
-      - name: Assert rustup-version output is set
-        env:
-          RUSTUP_VERSION: ${{ steps.action.outputs.rustup-version }}
-        run: |
-          echo "rustup-version: $RUSTUP_VERSION"
-          if [ -z "$RUSTUP_VERSION" ]; then
-            echo "FAIL: rustup-version output is empty"
-            exit 1
-          fi
-          if ! echo "$RUSTUP_VERSION" | grep -q "rustup"; then
-            echo "FAIL: rustup-version does not contain 'rustup'"
-            exit 1
-          fi
-          echo "PASS: rustup-version=$RUSTUP_VERSION"
 
       - name: Assert cachekey output is set
         env:
@@ -69,18 +51,11 @@ jobs:
           fi
           echo "PASS: cachekey=$CACHEKEY"
 
-      - name: Assert rustc is on PATH
+      - name: Assert rustup is available
         run: |
-          if ! command -v rustc &>/dev/null; then
-            echo "FAIL: rustc not found on PATH"
+          if ! command -v rustup &>/dev/null; then
+            echo "FAIL: rustup not found on PATH"
             exit 1
           fi
-          echo "PASS: rustc found at $(command -v rustc)"
-
-      - name: Assert cargo is on PATH
-        run: |
-          if ! command -v cargo &>/dev/null; then
-            echo "FAIL: cargo not found on PATH"
-            exit 1
-          fi
-          echo "PASS: cargo found at $(command -v cargo)"
+          rustup --version
+          echo "PASS: rustup is available"

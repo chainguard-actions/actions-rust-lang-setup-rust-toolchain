@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule: [cron: "40 1 * * *"]
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Rust ${{matrix.rust || '(default)'}} (toolchain-file=${{matrix.write-toolchain-file}}) (${{matrix.os}})
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+        write-toolchain-file:
+          - false
+          - true
+        rust:
+          # use stable toolchain as default
+          - null
+
+          # Test that the sparse registry check works.
+          # 1.66 and 1.67 don't support stable sparse registry.
+          - "1.66"
+
+          - "nightly"
+          - "beta"
+          - "stable"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # Test toolchain file support
+      - name: Write rust-toolchain.toml
+        if: matrix.write-toolchain-file
+        shell: bash
+        run: |
+          cat <<EOF >>rust-toolchain.toml
+          [toolchain]
+          channel = "nightly-2024-01-10"
+          components = [ "rustfmt", "rustc-dev" ]
+          targets = [ "wasm32-unknown-unknown", "thumbv7m-none-eabi" ]
+          profile = "minimal"
+          EOF
+
+      - id: toolchain
+        name: Run actions-rust-lang/setup-rust-toolchain ${{matrix.rust || 'on toolchain file'}}
+        uses: ./
+        with:
+          toolchain: ${{matrix.rust}}
+          components: clippy
+
+      - name: Check ${{'${{steps.toolchain.outputs.rustc-version}}'}}
+        env:
+          RUSTC_VERSION: ${{ steps.toolchain.outputs.rustc-version }}
+        run: echo "$RUSTC_VERSION"
+
+      - name: Check ${{'${{steps.toolchain.outputs.cargo-version}}'}}
+        env:
+          CARGO_VERSION: ${{ steps.toolchain.outputs.cargo-version }}
+        run: echo "$CARGO_VERSION"
+
+      - name: Check ${{'${{steps.toolchain.outputs.rustup-version}}'}}
+        env:
+          RUSTUP_VERSION: ${{ steps.toolchain.outputs.rustup-version }}
+        run: echo "$RUSTUP_VERSION"
+
+      - name: Check lack of toolchain input or file results in stable
+        if: matrix.write-toolchain-file == false && matrix.rust == null
+        shell: bash
+        run: |-
+          rustcv="$(rustc --version)"
+          [[ "$rustcv" != *"nightly"* && "$rustcv" != *"beta"* ]]
+
+      - name: Check toolchain file is being overridden
+        if: matrix.write-toolchain-file
+        shell: bash
+        run: |-
+          rustcv="$(rustc --version)"
+          [[ ! ( "$rustcv" == *"nightly"* && "$rustcv" == *"2024-01-10"* ) ]]
+
+      - shell: bash
+        run: rustc --version && cargo --version
+
+      # Test with creating a small project
+      - run: cargo init . --bin --name ci
+
+      # Add tiny empty crate.
+      # This checks that registry access works.
+      - run: cargo add serde_as
+
+      - run: cargo clippy
+
+  cache:
+    name: Cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install Rust
+        uses: ./
+        with:
+          components: clippy
+          cache: true
+          cache-workspaces: |-
+            ./test-workspace
+
+      - run: cargo clippy --manifest-path=./test-workspace/Cargo.toml

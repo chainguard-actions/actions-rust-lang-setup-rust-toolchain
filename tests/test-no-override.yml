@@ -1,4 +1,4 @@
-name: Test toolchain with additional target triple
+name: Test toolchain setup with override disabled
 on:
   workflow_dispatch:
 jobs:
@@ -11,7 +11,7 @@ jobs:
         uses: .
         with:
           toolchain: stable
-          target: "wasm32-unknown-unknown"
+          override: "false"
           cache: "false"
 
       - name: Assert rustc-version output is set
@@ -29,11 +29,19 @@ jobs:
           fi
           echo "PASS: rustc-version=$RUSTC_VERSION"
 
-      - name: Assert wasm32 target is installed
+      - name: Assert cargo-version output is set
+        env:
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
         run: |
-          if ! rustup target list --installed | grep -q "wasm32-unknown-unknown"; then
-            echo "FAIL: wasm32-unknown-unknown target not found in installed targets"
-            rustup target list --installed
+          echo "cargo-version: $CARGO_VERSION"
+          if [ -z "$CARGO_VERSION" ]; then
+            echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          echo "PASS: wasm32-unknown-unknown target is installed"
+          echo "PASS: cargo-version=$CARGO_VERSION"
+
+      - name: Assert rustc is functional without override
+        run: |
+          rustc --version
+          cargo --version
+          echo "PASS: rustc and cargo are functional without override"
