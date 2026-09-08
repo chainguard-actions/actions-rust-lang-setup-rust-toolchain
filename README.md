@@ -1,21 +1,120 @@
-# actions-rust-lang/setup-rust-toolchain
+# Install Rust Toolchain
 
-Setup specific Rust versions with caching pre-configured.
-It provides problem matchers for cargo and rustfmt issues.
+This GitHub Action installs a Rust toolchain using rustup.
+It further integrates into the ecosystem.
+Caching for Rust tools and build artifacts is enabled.
+Environment variables are set to optimize the cache hits.
+[Problem Matchers] are provided for build messages (cargo, clippy) and formatting (rustfmt).
 
+The action is heavily inspired by _dtolnay_'s <https://github.com/dtolnay/rust-toolchain> and extends it with further features.
 
-Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at [https://github.com/actions-rust-lang/setup-rust-toolchain](https://github.com/actions-rust-lang/setup-rust-toolchain).
+## Example workflow
 
-## Versions
+```yaml
+name: "Test Suite"
+on:
+  push:
+  pull_request:
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v1.15.2 | [`v1.15.2`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.15.2) | [`1780873`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/1780873c7b576612439a134613cc4cc74ce5538c) |
-| v1.15.3 | [`v1.15.3`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.15.3) | [`a0b538f`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/a0b538fa0b742a6aa35d6e2c169b4bd06d225a98) |
-| v1.15.4 | [`v1.15.4`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.15.4) | [`150fca8`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/150fca883cd4034361b621bd4e6a9d34e5143606) |
-| v1.16.0 | [`v1.16.0`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.16.0) | [`2b1f5e9`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/2b1f5e9b395427c92ee4e3331786ca3c37afe2d7) |
-| v1.16.1 | [`v1.16.1`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.16.1) | [`46268bd`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/46268bd060767258de96ed93c1251119784f2ab6) |
-| v1.17.0 | [`v1.17.0`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.17.0) | [`166cdcf`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/166cdcfd11aee3cb47222f9ddb555ce30ddb9659) |
+jobs:
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - run: cargo test --all-features
+
+  # Check formatting with rustfmt
+  formatting:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # Ensure rustfmt is installed and setup problem matcher
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+      - name: Rustfmt Check
+        uses: actions-rust-lang/rustfmt@v1
+```
+
+## Inputs
+
+All inputs are optional.
+If a [toolchain file](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file) (i.e., `rust-toolchain` or `rust-toolchain.toml`) is found in the root of the repository and no `toolchain` value is provided, all items specified in the toolchain file will be installed.
+If a `toolchain` value is provided, the toolchain file will be ignored.
+If no `toolchain` value or toolchain file is present, it will default to `stable`.
+First, all items specified in the toolchain file are installed.
+Afterward, the `components` and `target` specified via inputs are installed in addition to the items from the toolchain file.
+
+| Name                     | Description                                                                                                                                                                        | Default       |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `toolchain`              | Comma-separated list of Rustup toolchain specifier e.g. `stable`, `nightly`, `1.42.0`. The last version is the default.                                                            | stable        |
+| `target`                 | Additional target support to install e.g. `wasm32-unknown-unknown`                                                                                                                 |               |
+| `build-warnings`         | Sets the `build.warnings` config via the `CARGO_BUILD_WARNINGS` variable. (set to empty string to avoid overwriting existing flags)                                                | deny          |
+| `components`             | Comma-separated string of additional components to install e.g. `clippy, rustfmt`                                                                                                  |               |
+| `cache`                  | Automatically configure Rust cache (using [`Swatinem/rust-cache`])                                                                                                                 | true          |
+| `cache-directories`      | Propagates the value to [`Swatinem/rust-cache`]                                                                                                                                    |               |
+| `cache-workspaces`       | Propagates the value to [`Swatinem/rust-cache`]. Influenced by the value of `rust-src-dir`.                                                                                        |               |
+| `cache-on-failure`       | Propagates the value to [`Swatinem/rust-cache`]                                                                                                                                    | true          |
+| `cache-key`              | Propagates the value to [`Swatinem/rust-cache`] as `key`                                                                                                                           |               |
+| `cache-shared-key`       | Propagates the value to [`Swatinem/rust-cache`] as `shared-key`                                                                                                                    |               |
+| `cache-bin`              | Propagates the value to [`Swatinem/rust-cache`] as `cache-bin`                                                                                                                     | true          |
+| `cache-provider`         | Propagates the value to [`Swatinem/rust-cache`] as `cache-provider`                                                                                                                | 'github'      |
+| `cache-all-crates`       | Propagates the value to [`Swatinem/rust-cache`] as `cache-all-crates`                                                                                                              | false         |
+| `cache-workspace-crates` | Propagates the value to [`Swatinem/rust-cache`] as `cache-workspace-crates`                                                                                                        | false         |
+| `cache-save-if`          | Propagates the value to [`Swatinem/rust-cache`] as `save-if`                                                                                                                       | true          |
+| `cache-targets`          | Propagates the value to [`Swatinem/rust-cache`] as `cache-targets`                                                                                                                 | true          |
+| `matcher`                | Enable problem matcher to surface build messages and formatting issues                                                                                                             | true          |
+| `rustflags`              | Set the value of `RUSTFLAGS` (set to empty string to avoid overwriting existing flags)                                                                                             | ""            |
+| `override`               | Setup the last installed toolchain as the default via `rustup override`                                                                                                            | true          |
+| `rust-src-dir`           | Path from root directory to directory with the Rust source directory (if its not in the root of the repository). Sets a default value for `cache-workspaces` that enables caching. |               |
+
+[`Swatinem/rust-cache`]: https://github.com/Swatinem/rust-cache
+
+### RUSTFLAGS
+
+By default, this action sets the `RUSTFLAGS` environment variable to `-D warnings`.
+However, rustflags sources are mutually exclusive, so setting this environment variable omits any configuration through `target.*.rustflags` or `build.rustflags`.
+
+- If `RUSTFLAGS` is already set, no modifications of the variable are made and the original value remains.
+- If `RUSTFLAGS` is unset and the `rustflags` input is empty (i.e., the empty string), then it will remain unset.
+  Use this, if you want to prevent the value from being set because you make use of `target.*.rustflags` or `build.rustflags`.
+- Otherwise, the environment variable `RUSTFLAGS` is set to the content of `rustflags`.
+
+To prevent this from happening, set the `rustflags` input to an empty string, which will
+prevent the action from setting `RUSTFLAGS` at all, keeping any existing preferences.
+
+You can read more rustflags, and their load order, in the [Cargo reference].
+
+## Outputs
+
+| Name             | Description                                 |
+| ---------------- | ------------------------------------------- |
+| `rustc-version`  | Version as reported by `rustc --version`    |
+| `cargo-version`  | Version as reported by `cargo --version`    |
+| `rustup-version` | Version as reported by `rustup --version`   |
+| `cachekey`       | A short hash of the installed rustc version |
+
+## Dependencies
+
+The action works best on the GitHub-hosted runners, but can work on self-hosted ones too, provided the necessary dependencies are available.
+PRs to add support for more environments are welcome.
+
+- bash 5
+- brew (macOS only)
+- rustup or curl
+- using other node actions
+
+## License
+
+The scripts and documentation in this project are released under the [MIT
+License].
+
+[MIT License]: LICENSE
+[Problem Matchers]: https://github.com/actions/toolkit/blob/main/docs/problem-matchers.md
+[Cargo reference]: https://doc.rust-lang.org/cargo/reference/config.html?highlight=unknown#buildrustflags
 
 ## Privacy
 

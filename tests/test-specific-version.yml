@@ -1,0 +1,61 @@
+name: Test specific Rust toolchain version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.70.0"
+          cache: "false"
+
+      - name: Assert rustc-version contains 1.70.0
+        env:
+          RUSTC_VER: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $RUSTC_VER"
+          if [ -z "$RUSTC_VER" ]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if ! echo "$RUSTC_VER" | grep -q "1\.70\.0"; then
+            echo "FAIL: rustc-version does not contain '1.70.0', got: $RUSTC_VER"
+            exit 1
+          fi
+          echo "PASS: rustc-version = $RUSTC_VER"
+
+      - name: Assert cargo-version is set
+        env:
+          CARGO_VER: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "cargo-version: $CARGO_VER"
+          if [ -z "$CARGO_VER" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          echo "PASS: cargo-version = $CARGO_VER"
+
+      - name: Assert cachekey is set and non-empty
+        env:
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "cachekey: $CACHEKEY"
+          if [ -z "$CACHEKEY" ]; then
+            echo "FAIL: cachekey output is empty"
+            exit 1
+          fi
+          echo "PASS: cachekey = $CACHEKEY"
+
+      - name: Assert rustc reports correct version
+        run: |
+          ACTUAL=$(rustc --version)
+          echo "rustc --version: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -q "1\.70\.0"; then
+            echo "FAIL: rustc version does not match 1.70.0, got: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS"
