@@ -1,4 +1,4 @@
-name: Test target input
+name: Test cache-directories and cache-key inputs
 on:
   workflow_dispatch:
 jobs:
@@ -6,12 +6,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create extra cache directory
+        run: mkdir -p /tmp/extra-cache-dir
       - id: action
         uses: .
         with:
           toolchain: stable
-          target: x86_64-unknown-linux-musl
-          cache: "false"
+          cache: "true"
+          cache-directories: /tmp/extra-cache-dir
+          cache-key: my-custom-cache-key
       - name: Assert rustc-version output is set
         env:
           RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
@@ -22,10 +25,13 @@ jobs:
             exit 1
           fi
           echo "PASS"
-      - name: Assert target is installed
+      - name: Assert cargo-version output is set
+        env:
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
         run: |
-          if ! rustup target list --installed | grep -q "x86_64-unknown-linux-musl"; then
-            echo "FAIL: target x86_64-unknown-linux-musl not installed"
+          echo "cargo-version: $CARGO_VERSION"
+          if [ -z "$CARGO_VERSION" ]; then
+            echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          echo "PASS: target x86_64-unknown-linux-musl is installed"
+          echo "PASS"
