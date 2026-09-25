@@ -1,0 +1,60 @@
+name: Test multiple toolchains (last becomes default)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "1.79.0,1.80.0"
+          cache: "false"
+
+      - name: Assert rustc-version is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert default toolchain is the last one (1.80.0)
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $ACTUAL"
+          if [[ "$ACTUAL" != *"1.80.0"* ]]; then
+            echo "FAIL: expected default toolchain to be 1.80.0 (last in list), got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: default toolchain is 1.80.0 as expected"
+
+      - name: Assert both toolchains are installed
+        run: |
+          rustup toolchain list
+          if ! rustup toolchain list | grep -q "1.79.0"; then
+            echo "FAIL: toolchain 1.79.0 not found in installed toolchains"
+            exit 1
+          fi
+          if ! rustup toolchain list | grep -q "1.80.0"; then
+            echo "FAIL: toolchain 1.80.0 not found in installed toolchains"
+            exit 1
+          fi
+          echo "PASS: both toolchains are installed"
+
+      - name: Assert cachekey is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "cachekey: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: cachekey output is empty"
+            exit 1
+          fi
+          echo "PASS"

@@ -6,49 +6,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Create a minimal Cargo workspace for cache testing
+      - name: Create workspace and cache directories
         run: |
-          mkdir -p /tmp/rust-workspace/src
-          cat > /tmp/rust-workspace/Cargo.toml <<'EOF'
-          [package]
-          name = "hello"
-          version = "0.1.0"
-          edition = "2021"
-          EOF
-          echo 'fn main() {}' > /tmp/rust-workspace/src/main.rs
+          mkdir -p "$GITHUB_WORKSPACE/my-workspace/target"
+          mkdir -p "$GITHUB_WORKSPACE/extra-cache-dir"
       - id: action
         uses: .
         with:
           toolchain: stable
           cache: "true"
-          cache-workspaces: /tmp/rust-workspace
-          cache-directories: /tmp/rust-workspace/target
+          cache-workspaces: my-workspace -> my-workspace/target
+          cache-directories: extra-cache-dir
           cache-key: test-cache-key
           cache-shared-key: test-shared-key
           cache-on-failure: "true"
           cache-bin: "true"
-          cache-provider: github
-          cache-all-crates: "false"
-          cache-workspace-crates: "false"
-          override: "true"
-          matcher: "false"
-          rustflags: ""
       - name: Assert rustc-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual rustc-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
           echo "PASS"
       - name: Assert cachekey output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.cachekey }}
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
         run: |
-          echo "actual cachekey: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cachekey: $CACHEKEY"
+          if [ -z "$CACHEKEY" ]; then
             echo "FAIL: cachekey output is empty"
             exit 1
           fi

@@ -1,0 +1,63 @@
+name: Test cache disabled and custom rustflags
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: "stable"
+          cache: "false"
+          rustflags: ""
+
+      - name: Assert rustc-version is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "rustc-version: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != rustc* ]]; then
+            echo "FAIL: rustc-version does not start with 'rustc'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert RUSTFLAGS is not set (empty rustflags input)
+        run: |
+          echo "RUSTFLAGS: '${RUSTFLAGS}'"
+          if [[ -n "$RUSTFLAGS" ]]; then
+            echo "FAIL: expected RUSTFLAGS to be unset/empty when rustflags input is empty, got '$RUSTFLAGS'"
+            exit 1
+          fi
+          echo "PASS: RUSTFLAGS is not set"
+
+      - name: Assert cargo is available
+        run: |
+          which cargo
+          cargo --version
+          echo "PASS: cargo is available"
+
+      - name: Assert CARGO_INCREMENTAL is set to 0
+        run: |
+          echo "CARGO_INCREMENTAL: $CARGO_INCREMENTAL"
+          if [[ "$CARGO_INCREMENTAL" != "0" ]]; then
+            echo "FAIL: expected CARGO_INCREMENTAL=0, got '$CARGO_INCREMENTAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert CARGO_TERM_COLOR is set to always
+        run: |
+          echo "CARGO_TERM_COLOR: $CARGO_TERM_COLOR"
+          if [[ "$CARGO_TERM_COLOR" != "always" ]]; then
+            echo "FAIL: expected CARGO_TERM_COLOR=always, got '$CARGO_TERM_COLOR'"
+            exit 1
+          fi
+          echo "PASS"

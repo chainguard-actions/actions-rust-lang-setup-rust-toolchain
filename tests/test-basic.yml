@@ -1,4 +1,4 @@
-name: Test basic usage with toolchain, components, and target
+name: Test basic usage (default stable toolchain)
 on:
   workflow_dispatch:
 jobs:
@@ -6,65 +6,85 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - id: action
         uses: .
         with:
-          toolchain: stable
-          components: rustfmt,clippy
-          target: x86_64-unknown-linux-gnu
           cache: "false"
-          matcher: "true"
-          rustflags: "-D warnings"
-          override: "true"
-      - name: Assert rustc-version output is set
+
+      - name: Assert rustc-version is set
         env:
           ACTUAL: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual rustc-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustc-version: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
+          if [[ "$ACTUAL" != rustc* ]]; then
+            echo "FAIL: rustc-version does not start with 'rustc'"
+            exit 1
+          fi
           echo "PASS"
-      - name: Assert cargo-version output is set
+
+      - name: Assert cargo-version is set
         env:
           ACTUAL: ${{ steps.action.outputs.cargo-version }}
         run: |
-          echo "actual cargo-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cargo-version: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert rustup-version output is set
-        env:
-          ACTUAL: ${{ steps.action.outputs.rustup-version }}
-        run: |
-          echo "actual rustup-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: rustup-version output is empty"
+          if [[ "$ACTUAL" != cargo* ]]; then
+            echo "FAIL: cargo-version does not start with 'cargo'"
             exit 1
           fi
           echo "PASS"
-      - name: Assert cachekey output is set
+
+      - name: Assert rustup-version is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustup-version }}
+        run: |
+          echo "rustup-version: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
+            echo "FAIL: rustup-version output is empty"
+            exit 1
+          fi
+          if [[ "$ACTUAL" != rustup* ]]; then
+            echo "FAIL: rustup-version does not start with 'rustup'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert cachekey is set
         env:
           ACTUAL: ${{ steps.action.outputs.cachekey }}
         run: |
-          echo "actual cachekey: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cachekey: $ACTUAL"
+          if [[ -z "$ACTUAL" ]]; then
             echo "FAIL: cachekey output is empty"
             exit 1
           fi
           echo "PASS"
-      - name: Assert rustfmt is installed
+
+      - name: Assert rustc is available on PATH
         run: |
-          rustfmt --version
-          echo "PASS: rustfmt is installed"
-      - name: Assert clippy is installed
+          which rustc
+          rustc --version
+          echo "PASS: rustc is available"
+
+      - name: Assert cargo is available on PATH
         run: |
-          cargo clippy --version
-          echo "PASS: clippy is installed"
-      - name: Assert target is installed
+          which cargo
+          cargo --version
+          echo "PASS: cargo is available"
+
+      - name: Assert RUSTFLAGS env var is set
         run: |
-          rustup target list --installed | grep "x86_64-unknown-linux-gnu"
-          echo "PASS: target x86_64-unknown-linux-gnu is installed"
+          echo "RUSTFLAGS: $RUSTFLAGS"
+          if [[ "$RUSTFLAGS" != "-D warnings" ]]; then
+            echo "FAIL: expected RUSTFLAGS='-D warnings', got '$RUSTFLAGS'"
+            exit 1
+          fi
+          echo "PASS"

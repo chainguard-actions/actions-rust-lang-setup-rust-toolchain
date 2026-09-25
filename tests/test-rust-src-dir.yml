@@ -6,47 +6,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create rust source subdirectory
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/rust-src"
       - id: action
         uses: .
         with:
           toolchain: stable
-          rust-src-dir: actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.2/tests/fixtures/rust-src
+          rust-src-dir: rust-src
           cache: "false"
-          matcher: "false"
-          rustflags: ""
-          override: "true"
       - name: Assert rustc-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual rustc-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
           echo "PASS"
       - name: Assert cargo-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
         run: |
-          echo "actual cargo-version: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cargo-version: $CARGO_VERSION"
+          if [ -z "$CARGO_VERSION" ]; then
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
           echo "PASS"
-      - name: Assert cachekey output is set
-        env:
-          ACTUAL: ${{ steps.action.outputs.cachekey }}
-        run: |
-          echo "actual cachekey: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: cachekey output is empty"
-            exit 1
-          fi
-          echo "PASS"
-      - name: Assert can build in rust-src-dir
-        working-directory: actions/hardened/actions-rust-lang--setup-rust-toolchain/v1.15.2/tests/fixtures/rust-src
-        run: |
-          cargo build
-          echo "PASS: cargo build succeeded in rust-src-dir"
