@@ -24,9 +24,8 @@ jobs:
           echo "PASS"
       - name: Assert target is installed
         run: |
-          rustup target list --installed | grep "x86_64-unknown-linux-musl"
-          if [ $? -ne 0 ]; then
-            echo "FAIL: target x86_64-unknown-linux-musl not installed"
+          if ! rustup target list --installed | grep -q "x86_64-unknown-linux-musl"; then
+            echo "FAIL: target x86_64-unknown-linux-musl is not installed"
             exit 1
           fi
-          echo "PASS: target installed"
+          echo "PASS: target x86_64-unknown-linux-musl is installed"
