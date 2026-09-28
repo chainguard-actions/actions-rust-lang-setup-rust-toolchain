@@ -6,12 +6,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create a minimal Cargo workspace
+        run: |
+          mkdir -p /tmp/my-workspace
+          cat > /tmp/my-workspace/Cargo.toml <<'EOF'
+          [package]
+          name = "hello"
+          version = "0.1.0"
+          edition = "2021"
+          EOF
+          mkdir -p /tmp/my-workspace/src
+          echo 'fn main() {}' > /tmp/my-workspace/src/main.rs
       - id: action
         uses: .
         with:
           toolchain: stable
           cache: "true"
-          cache-workspaces: ". -> target"
+          cache-workspaces: /tmp/my-workspace -> target
       - name: Assert rustc-version output is set
         env:
           RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
