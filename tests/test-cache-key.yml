@@ -11,23 +11,23 @@ jobs:
         with:
           toolchain: stable
           cache: "true"
-          cache-key: my-custom-cache-key
+          cache-key: "my-custom-cache-key"
       - name: Assert rustc-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
           echo "PASS"
       - name: Assert cachekey output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.cachekey }}
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
         run: |
-          echo "actual: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cachekey: $CACHEKEY"
+          if [ -z "$CACHEKEY" ]; then
             echo "FAIL: cachekey output is empty"
             exit 1
           fi

@@ -14,20 +14,20 @@ jobs:
           cache-workspaces: ". -> target"
       - name: Assert rustc-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+          RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
         run: |
-          echo "actual: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "rustc-version: $RUSTC_VERSION"
+          if [ -z "$RUSTC_VERSION" ]; then
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
           echo "PASS"
       - name: Assert cargo-version output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.cargo-version }}
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
         run: |
-          echo "actual: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
+          echo "cargo-version: $CARGO_VERSION"
+          if [ -z "$CARGO_VERSION" ]; then
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi

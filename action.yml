@@ -117,31 +117,28 @@ runs:
       env:
         targets: ${{inputs.target}}
         components: ${{inputs.components}}
-        toolchain: ${{inputs.toolchain}}
+        DOWNGRADE_FLAG: ${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}
       shell: bash
       run: |
         : construct rustup command line
-        tgt_args=()
-        if [[ -n "$targets" ]]; then
-          read -ra tgt_arr <<< "${targets//,/ }"
-          for t in "${tgt_arr[@]}"; do tgt_args+=(--target "$t"); done
-        fi
-        raw_targets="${tgt_args[*]+"${tgt_args[*]}"}"
-        safe_targets=$(printf '%s' "$raw_targets" | tr -d '\n\r')
-        echo "targets=$safe_targets" >> "$GITHUB_OUTPUT"
-        cmp_args=()
-        if [[ -n "$components" ]]; then
-          read -ra cmp_arr <<< "${components//,/ }"
-          for c in "${cmp_arr[@]}"; do cmp_args+=(--component "$c"); done
-        fi
-        raw_components="${cmp_args[*]+"${cmp_args[*]}"}"
-        safe_components=$(printf '%s' "$raw_components" | tr -d '\n\r')
-        echo "components=$safe_components" >> "$GITHUB_OUTPUT"
-        if [[ "$toolchain" == *nightly* && -n "$components" ]]; then
-          echo "downgrade= --allow-downgrade" >> "$GITHUB_OUTPUT"
-        else
-          echo "downgrade=" >> "$GITHUB_OUTPUT"
-        fi
+        safe_targets=$(printf '%s' "$targets" | tr -d '\n\r')
+        safe_components=$(printf '%s' "$components" | tr -d '\n\r')
+        safe_downgrade=$(printf '%s' "$DOWNGRADE_FLAG" | tr -d '\n\r')
+        targets_flags=""
+        IFS=',' read -ra target_arr <<< "$safe_targets"
+        for t in "${target_arr[@]}"; do
+          t="${t// /}"
+          [[ -n "$t" ]] && targets_flags="$targets_flags --target $t"
+        done
+        components_flags=""
+        IFS=',' read -ra component_arr <<< "$safe_components"
+        for c in "${component_arr[@]}"; do
+          c="${c// /}"
+          [[ -n "$c" ]] && components_flags="$components_flags --component $c"
+        done
+        echo "targets=$targets_flags" >> "$GITHUB_OUTPUT"
+        echo "components=$components_flags" >> "$GITHUB_OUTPUT"
+        echo "downgrade=$safe_downgrade" >> "$GITHUB_OUTPUT"
     # The environment variables always need to be set before the caching action
     - name: Setting Environment Variables
       env:
@@ -178,14 +175,15 @@ runs:
       env:
         ACTION_PATH: ${{ github.action_path }}
       shell: bash
-      run: echo "::add-matcher::${ACTION_PATH}/rust.json"
+      run: echo "::add-matcher::$ACTION_PATH/rust.json"
     - name: Install rustup, if needed
       shell: bash
       run: |
         if ! command -v rustup &> /dev/null ; then
-          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o rustup-init.sh
-          sh rustup-init.sh --default-toolchain none -y
-          rm -f rustup-init.sh
+          RUSTUP_INSTALL_SCRIPT="$(mktemp)"
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o "$RUSTUP_INSTALL_SCRIPT"
+          sh "$RUSTUP_INSTALL_SCRIPT" --default-toolchain none -y
+          rm -f "$RUSTUP_INSTALL_SCRIPT"
 
           # Resolve the correct CARGO_HOME path depending on OS
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -203,9 +201,9 @@ runs:
         components: ${{inputs.components}}
         override: ${{inputs.override}}
         rust_src_dir: ${{inputs.rust-src-dir}}
-        flags_targets: ${{steps.flags.outputs.targets}}
-        flags_components: ${{steps.flags.outputs.components}}
-        flags_downgrade: ${{steps.flags.outputs.downgrade}}
+        FLAGS_TARGETS: ${{steps.flags.outputs.targets}}
+        FLAGS_COMPONENTS: ${{steps.flags.outputs.components}}
+        FLAGS_DOWNGRADE: ${{steps.flags.outputs.downgrade}}
       shell: bash
       run: |
         # Check if value is set
@@ -229,11 +227,11 @@ runs:
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
           if [[ -n "$components" ]]; then
-            read -ra comp_arr <<< "${components//,/ }"
+            IFS=',' read -ra comp_arr <<< "$components"
             rustup component add "${comp_arr[@]}"
           fi
           if [[ -n "$targets" ]]; then
-            read -ra tgt_arr <<< "${targets//,/ }"
+            IFS=',' read -ra tgt_arr <<< "$targets"
             rustup target add "${tgt_arr[@]}"
           fi
         else
@@ -241,29 +239,28 @@ runs:
           then
             toolchain=stable
           fi
-          read -ra tc_arr <<< "${toolchain//,/ }"
-          # Build the rustup command using arrays to avoid unquoted expansion
-          rustup_args=("${tc_arr[@]}")
-          if [[ -n "$flags_targets" ]]; then
-            read -ra ft_arr <<< "$flags_targets"
-            rustup_args+=("${ft_arr[@]}")
+          IFS=',' read -ra toolchain_arr <<< "$toolchain"
+          # FLAGS_TARGETS, FLAGS_COMPONENTS, FLAGS_DOWNGRADE are sanitized step outputs (space-separated flags)
+          install_args=("${toolchain_arr[@]}")
+          if [[ -n "$FLAGS_TARGETS" ]]; then
+            read -ra flags_targets_arr <<< "$FLAGS_TARGETS"
+            install_args+=("${flags_targets_arr[@]}")
           fi
-          if [[ -n "$flags_components" ]]; then
-            read -ra fc_arr <<< "$flags_components"
-            rustup_args+=("${fc_arr[@]}")
+          if [[ -n "$FLAGS_COMPONENTS" ]]; then
+            read -ra flags_components_arr <<< "$FLAGS_COMPONENTS"
+            install_args+=("${flags_components_arr[@]}")
           fi
-          rustup_args+=(--profile minimal)
-          if [[ -n "$flags_downgrade" ]]; then
-            read -ra fd_arr <<< "$flags_downgrade"
-            rustup_args+=("${fd_arr[@]}")
+          install_args+=(--profile minimal)
+          if [[ -n "$FLAGS_DOWNGRADE" ]]; then
+            read -ra flags_downgrade_arr <<< "$FLAGS_DOWNGRADE"
+            install_args+=("${flags_downgrade_arr[@]}")
           fi
-          rustup_args+=(--no-self-update)
-          rustup toolchain install "${rustup_args[@]}"
+          install_args+=(--no-self-update)
+          rustup toolchain install "${install_args[@]}"
           # Take the last element from the list
           if [[ "$override" == "true" ]]
           then
-            last_toolchain="${toolchain##*,}"
-            rustup override set "$last_toolchain"
+            rustup override set "${toolchain_arr[-1]}"
           fi
         fi
     - id: versions
@@ -297,7 +294,7 @@ runs:
         fi
     - name: Setup Rust Caching
       if: inputs.cache == 'true'
-      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      uses: chainguard-actions/swatinem-rust-cache@f96316acce2a13086983d57da5184ff1492a665f # v2.9.1
       with:
         workspaces: ${{ inputs.cache-workspaces || inputs.rust-src-dir }}
         cache-directories: ${{inputs.cache-directories}}
