@@ -22,3 +22,13 @@ jobs:
             exit 1
           fi
           echo "PASS"
+      - name: Assert cachekey output is set
+        env:
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "cachekey: $CACHEKEY"
+          if [ -z "$CACHEKEY" ]; then
+            echo "FAIL: cachekey output is empty"
+            exit 1
+          fi
+          echo "PASS"
