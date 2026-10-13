@@ -117,27 +117,15 @@ runs:
       env:
         targets: ${{inputs.target}}
         components: ${{inputs.components}}
-        DOWNGRADE_FLAG: ${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}
+        downgrade: ${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}
       shell: bash
       run: |
         : construct rustup command line
-        safe_targets=$(printf '%s' "$targets" | tr -d '\n\r')
-        safe_components=$(printf '%s' "$components" | tr -d '\n\r')
-        safe_downgrade=$(printf '%s' "$DOWNGRADE_FLAG" | tr -d '\n\r')
-        targets_flags=""
-        IFS=',' read -ra target_arr <<< "$safe_targets"
-        for t in "${target_arr[@]}"; do
-          t="${t// /}"
-          [[ -n "$t" ]] && targets_flags="$targets_flags --target $t"
-        done
-        components_flags=""
-        IFS=',' read -ra component_arr <<< "$safe_components"
-        for c in "${component_arr[@]}"; do
-          c="${c// /}"
-          [[ -n "$c" ]] && components_flags="$components_flags --component $c"
-        done
-        echo "targets=$targets_flags" >> "$GITHUB_OUTPUT"
-        echo "components=$components_flags" >> "$GITHUB_OUTPUT"
+        safe_targets="$(printf '%s' "$targets" | tr -d '\n\r')"
+        safe_components="$(printf '%s' "$components" | tr -d '\n\r')"
+        safe_downgrade="$(printf '%s' "$downgrade" | tr -d '\n\r')"
+        echo "targets=$(for t in ${safe_targets//,/ }; do printf ' --target %s' "$t"; done)" >> "$GITHUB_OUTPUT"
+        echo "components=$(for c in ${safe_components//,/ }; do printf ' --component %s' "$c"; done)" >> "$GITHUB_OUTPUT"
         echo "downgrade=$safe_downgrade" >> "$GITHUB_OUTPUT"
     # The environment variables always need to be set before the caching action
     - name: Setting Environment Variables
@@ -158,7 +146,7 @@ runs:
           echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
         fi
         if [[ ( ! -v RUSTFLAGS ) && $NEW_RUSTFLAGS != "" ]]; then
-          safe_rustflags=$(printf '%s' "$NEW_RUSTFLAGS" | tr -d '\n\r')
+          safe_rustflags="$(printf '%s' "$NEW_RUSTFLAGS" | tr -d '\n\r')"
           echo "RUSTFLAGS=$safe_rustflags" >> $GITHUB_ENV
         fi
         # Enable faster sparse index on nightly
@@ -180,10 +168,10 @@ runs:
       shell: bash
       run: |
         if ! command -v rustup &> /dev/null ; then
-          RUSTUP_INSTALL_SCRIPT="$(mktemp)"
-          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o "$RUSTUP_INSTALL_SCRIPT"
-          sh "$RUSTUP_INSTALL_SCRIPT" --default-toolchain none -y
-          rm -f "$RUSTUP_INSTALL_SCRIPT"
+          RUSTUP_INIT="$(mktemp)"
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o "$RUSTUP_INIT"
+          sh "$RUSTUP_INIT" --default-toolchain none -y
+          rm -f "$RUSTUP_INIT"
 
           # Resolve the correct CARGO_HOME path depending on OS
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -201,9 +189,9 @@ runs:
         components: ${{inputs.components}}
         override: ${{inputs.override}}
         rust_src_dir: ${{inputs.rust-src-dir}}
-        FLAGS_TARGETS: ${{steps.flags.outputs.targets}}
-        FLAGS_COMPONENTS: ${{steps.flags.outputs.components}}
-        FLAGS_DOWNGRADE: ${{steps.flags.outputs.downgrade}}
+        flag_targets: ${{steps.flags.outputs.targets}}
+        flag_components: ${{steps.flags.outputs.components}}
+        flag_downgrade: ${{steps.flags.outputs.downgrade}}
       shell: bash
       run: |
         # Check if value is set
@@ -219,6 +207,22 @@ runs:
             exit 1
           fi
         fi
+        # Tokenize flag_targets, flag_components, flag_downgrade into arrays
+        arr_flag_targets=()
+        if [[ -n "$flag_targets" ]]; then
+          while IFS= read -r -d '' t; do arr_flag_targets+=("$t"); done \
+            < <(printf '%s' "$flag_targets" | xargs printf '%s\0')
+        fi
+        arr_flag_components=()
+        if [[ -n "$flag_components" ]]; then
+          while IFS= read -r -d '' t; do arr_flag_components+=("$t"); done \
+            < <(printf '%s' "$flag_components" | xargs printf '%s\0')
+        fi
+        arr_flag_downgrade=()
+        if [[ -n "$flag_downgrade" ]]; then
+          while IFS= read -r -d '' t; do arr_flag_downgrade+=("$t"); done \
+            < <(printf '%s' "$flag_downgrade" | xargs printf '%s\0')
+        fi
         if [[ -z "$toolchain" && ( -f "rust-toolchain" || -f "rust-toolchain.toml") ]]
         then
           # Install the toolchain as specified in the file
@@ -227,40 +231,31 @@ runs:
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
           if [[ -n "$components" ]]; then
-            IFS=',' read -ra comp_arr <<< "$components"
-            rustup component add "${comp_arr[@]}"
+            arr_components=()
+            while IFS= read -r -d '' t; do arr_components+=("$t"); done \
+              < <(printf '%s' "${components//,/ }" | xargs printf '%s\0')
+            rustup component add "${arr_components[@]}"
           fi
           if [[ -n "$targets" ]]; then
-            IFS=',' read -ra tgt_arr <<< "$targets"
-            rustup target add "${tgt_arr[@]}"
+            arr_targets=()
+            while IFS= read -r -d '' t; do arr_targets+=("$t"); done \
+              < <(printf '%s' "${targets//,/ }" | xargs printf '%s\0')
+            rustup target add "${arr_targets[@]}"
           fi
         else
           if [[ -z "$toolchain" ]]
           then
             toolchain=stable
           fi
-          IFS=',' read -ra toolchain_arr <<< "$toolchain"
-          # FLAGS_TARGETS, FLAGS_COMPONENTS, FLAGS_DOWNGRADE are sanitized step outputs (space-separated flags)
-          install_args=("${toolchain_arr[@]}")
-          if [[ -n "$FLAGS_TARGETS" ]]; then
-            read -ra flags_targets_arr <<< "$FLAGS_TARGETS"
-            install_args+=("${flags_targets_arr[@]}")
-          fi
-          if [[ -n "$FLAGS_COMPONENTS" ]]; then
-            read -ra flags_components_arr <<< "$FLAGS_COMPONENTS"
-            install_args+=("${flags_components_arr[@]}")
-          fi
-          install_args+=(--profile minimal)
-          if [[ -n "$FLAGS_DOWNGRADE" ]]; then
-            read -ra flags_downgrade_arr <<< "$FLAGS_DOWNGRADE"
-            install_args+=("${flags_downgrade_arr[@]}")
-          fi
-          install_args+=(--no-self-update)
-          rustup toolchain install "${install_args[@]}"
+          arr_toolchain=()
+          while IFS= read -r -d '' t; do arr_toolchain+=("$t"); done \
+            < <(printf '%s' "${toolchain//,/ }" | xargs printf '%s\0')
+          rustup toolchain install "${arr_toolchain[@]}" "${arr_flag_targets[@]}" "${arr_flag_components[@]}" --profile minimal "${arr_flag_downgrade[@]}" --no-self-update
           # Take the last element from the list
           if [[ "$override" == "true" ]]
           then
-            rustup override set "${toolchain_arr[-1]}"
+            last_toolchain="${toolchain//*,/}"
+            rustup override set "$last_toolchain"
           fi
         fi
     - id: versions
