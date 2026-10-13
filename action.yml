@@ -117,26 +117,24 @@ runs:
       shell: bash
       run: |
         : construct rustup command line
-        targets_val=""
-        if [[ -n "$targets" ]]; then
-          IFS=',' read -ra _targets <<< "$targets"
-          for t in "${_targets[@]}"; do
-            targets_val+=$(printf ' --target %s' "$t")
-          done
-        fi
-        safe_targets=$(printf '%s' "$targets_val" | tr -d '\n\r')
-        echo "targets=$safe_targets" >> "$GITHUB_OUTPUT"
-        components_val=""
-        if [[ -n "$components" ]]; then
-          IFS=',' read -ra _components <<< "$components"
-          for c in "${_components[@]}"; do
-            components_val+=$(printf ' --component %s' "$c")
-          done
-        fi
-        safe_components=$(printf '%s' "$components_val" | tr -d '\n\r')
-        echo "components=$safe_components" >> "$GITHUB_OUTPUT"
-        safe_downgrade=$(printf '%s' "$downgrade" | tr -d '\n\r')
-        echo "downgrade=$safe_downgrade" >> "$GITHUB_OUTPUT"
+        targets_out=""
+        while IFS= read -r -d '' t; do
+          t="$(printf '%s' "$t" | tr -d '\n\r' | xargs)"
+          [[ -n "$t" ]] && targets_out="${targets_out} --target ${t}"
+        done < <(printf '%s' "${targets//,/ }" | xargs printf '%s\0')
+        safe_targets="$(printf '%s' "$targets_out" | tr -d '\n\r')"
+        echo "targets=${safe_targets}" >> "$GITHUB_OUTPUT"
+
+        components_out=""
+        while IFS= read -r -d '' c; do
+          c="$(printf '%s' "$c" | tr -d '\n\r' | xargs)"
+          [[ -n "$c" ]] && components_out="${components_out} --component ${c}"
+        done < <(printf '%s' "${components//,/ }" | xargs printf '%s\0')
+        safe_components="$(printf '%s' "$components_out" | tr -d '\n\r')"
+        echo "components=${safe_components}" >> "$GITHUB_OUTPUT"
+
+        safe_downgrade="$(printf '%s' "$downgrade" | tr -d '\n\r')"
+        echo "downgrade=${safe_downgrade}" >> "$GITHUB_OUTPUT"
     # The environment variables always need to be set before the caching action
     - name: Setting Environment Variables
       env:
@@ -155,9 +153,9 @@ runs:
         if [[ ! -v RUST_BACKTRACE ]]; then
           echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
         fi
-        if [[ ( ! -v RUSTFLAGS ) && "$NEW_RUSTFLAGS" != "" ]]; then
-          safe_rustflags=$(printf '%s' "$NEW_RUSTFLAGS" | tr -d '\n\r')
-          echo "RUSTFLAGS=$safe_rustflags" >> "$GITHUB_ENV"
+        if [[ ( ! -v RUSTFLAGS ) && $NEW_RUSTFLAGS != "" ]]; then
+          safe_rustflags="$(printf '%s' "$NEW_RUSTFLAGS" | tr -d '\n\r')"
+          echo "RUSTFLAGS=$safe_rustflags" >> $GITHUB_ENV
         fi
         # Enable faster sparse index on nightly
         # The value is ignored on stable and causes no problems
@@ -178,8 +176,10 @@ runs:
       shell: bash
       run: |
         if ! command -v rustup &> /dev/null ; then
-          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o /tmp/rustup-init.sh
-          sh /tmp/rustup-init.sh --default-toolchain none -y
+          RUSTUP_INIT="$(mktemp)"
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o "$RUSTUP_INIT"
+          sh "$RUSTUP_INIT" --default-toolchain none -y
+          rm -f "$RUSTUP_INIT"
 
           # Resolve the correct CARGO_HOME path depending on OS
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -223,39 +223,53 @@ runs:
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
           if [[ -n "$components" ]]; then
-            IFS=',' read -ra _components <<< "$components"
-            rustup component add "${_components[@]}"
+            comp_args=()
+            while IFS= read -r -d '' c; do
+              c="$(printf '%s' "$c" | xargs)"
+              [[ -n "$c" ]] && comp_args+=("$c")
+            done < <(printf '%s' "${components//,/ }" | xargs printf '%s\0')
+            rustup component add "${comp_args[@]}"
           fi
           if [[ -n "$targets" ]]; then
-            IFS=',' read -ra _targets <<< "$targets"
-            rustup target add "${_targets[@]}"
+            tgt_args=()
+            while IFS= read -r -d '' t; do
+              t="$(printf '%s' "$t" | xargs)"
+              [[ -n "$t" ]] && tgt_args+=("$t")
+            done < <(printf '%s' "${targets//,/ }" | xargs printf '%s\0')
+            rustup target add "${tgt_args[@]}"
           fi
         else
           if [[ -z "$toolchain" ]]
           then
             toolchain=stable
           fi
-          IFS=',' read -ra _toolchains <<< "$toolchain"
+          tc_args=()
+          while IFS= read -r -d '' tc; do
+            tc="$(printf '%s' "$tc" | xargs)"
+            [[ -n "$tc" ]] && tc_args+=("$tc")
+          done < <(printf '%s' "${toolchain//,/ }" | xargs printf '%s\0')
           ft_args=()
-          if [[ -n "$flags_targets" ]]; then
-            while IFS= read -r -d '' _t; do ft_args+=("$_t"); done \
+          if [ -n "$flags_targets" ]; then
+            while IFS= read -r -d '' t; do ft_args+=("$t"); done \
               < <(printf '%s' "$flags_targets" | xargs printf '%s\0')
           fi
           fc_args=()
-          if [[ -n "$flags_components" ]]; then
-            while IFS= read -r -d '' _c; do fc_args+=("$_c"); done \
+          if [ -n "$flags_components" ]; then
+            while IFS= read -r -d '' c; do fc_args+=("$c"); done \
               < <(printf '%s' "$flags_components" | xargs printf '%s\0')
           fi
           fd_args=()
-          if [[ -n "$flags_downgrade" ]]; then
-            while IFS= read -r -d '' _d; do fd_args+=("$_d"); done \
+          if [ -n "$flags_downgrade" ]; then
+            while IFS= read -r -d '' d; do fd_args+=("$d"); done \
               < <(printf '%s' "$flags_downgrade" | xargs printf '%s\0')
           fi
-          rustup toolchain install "${_toolchains[@]}" "${ft_args[@]}" "${fc_args[@]}" --profile minimal "${fd_args[@]}" --no-self-update
+          rustup toolchain install "${tc_args[@]}" "${ft_args[@]}" "${fc_args[@]}" --profile minimal "${fd_args[@]}" --no-self-update
           # Take the last element from the list
           if [[ "$override" == "true" ]]
           then
-            rustup override set "${_toolchains[-1]}"
+            last_tc="${tc_args[-1]}"
+            last_tc="$(printf '%s' "$last_tc" | xargs)"
+            rustup override set "$last_tc"
           fi
         fi
     - id: versions
@@ -285,7 +299,7 @@ runs:
         # If we detect an incompatible value, set it to "git" which is always supported.
         if [[ "$RUSTC_VERSION" =~ ^rustc\ (1\.6[67]\.|1\.68\.0-nightly) && "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL}" == "sparse" ]]; then
           echo "Downgrade cargo registry protocol to git"
-          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> "$GITHUB_ENV"
+          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> $GITHUB_ENV
         fi
     - name: Setup Rust Caching
       if: inputs.cache == 'true'

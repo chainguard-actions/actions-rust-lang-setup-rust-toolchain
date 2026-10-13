@@ -10,81 +10,61 @@
 
 **Harden Agent Version:** `2`
 
-Action **actions-rust-lang--setup-rust-toolchain/v1.15.4** was hardened automatically. 8 finding(s) were identified and resolved across 2 iteration(s).
+Action **actions-rust-lang--setup-rust-toolchain/v1.15.4** was hardened automatically. 3 finding(s) were identified and resolved across 4 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Rule (a): The `flags` step directly interpolates `${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}` inside the `run:` shell command string on the `echo "downgrade=..."` line. Any `${{ }}` expression inside a `run:` block is subject to YAML template substitution before the shell sees it, enabling script injection. Additionally, rule (b): the unquoted shell expansions `$t` (in `echo -n ' --target' $t`) and `$c` (in `echo -n ' --component' $c`) inside the for-loops expand values derived from `inputs.target` and `inputs.components` without double-quoting, allowing shell metacharacter injection.
+Multiple `run:` blocks in action.yml contain direct `${{ }}` expression interpolation, violating sub-rule (a). These expressions are substituted into the shell script string before the shell executes it, allowing injection of shell metacharacters.
+
+1. **flags step (line ~101):** `echo "downgrade=${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}" >> $GITHUB_OUTPUT` — `inputs.toolchain` and `inputs.components` are interpolated directly into the run script.
+
+2. **Install Rust Problem Matcher step (line ~132):** `run: echo "::add-matcher::${{ github.action_path }}/rust.json"` — `github.action_path` is interpolated directly into the run script.
+
+3. **rustup toolchain install step (line ~185):** `rustup toolchain install ${toolchain//,/ } ${{steps.flags.outputs.targets}}${{steps.flags.outputs.components}} --profile minimal${{steps.flags.outputs.downgrade}} --no-self-update` — three `steps.*.outputs.*` expressions are interpolated directly into the shell command.
+
+4. **Downgrade registry step (line ~208):** `if [[ "${{steps.versions.outputs.rustc-version}}" =~ ^rustc\ ...` — a step output is interpolated directly into the shell condition.
+
+Additionally, sub-rule (b) violations exist: in the **flags step** (lines ~99–100), `${targets}` and `${components}` are expanded unquoted inside `for` loops (`for t in ${targets//,/ }`), and in the **rustup toolchain install step** (lines ~175–178), `$components` and `$targets` are expanded unquoted in `if [[ -n $components ]]` and `rustup component add ${components//,/ }` / `rustup target add ${targets//,/ }`. These env vars hold values from `inputs.target` and `inputs.components` and must be double-quoted.
 
 Locations:
 
-- `action.yml:107`
-- `action.yml:108`
-- `action.yml:109`
-
-### script-injection (severity: high)
-
-Rule (b): The `Setting Environment Variables` step uses `$NEW_RUSTFLAGS` unquoted in the condition `$NEW_RUSTFLAGS != ""` (line 129), where `NEW_RUSTFLAGS` is sourced from `inputs.rustflags`. Unquoted expansion of a workflow-controllable env var allows shell metacharacter injection.
-
-Locations:
-
-- `action.yml:129`
-
-### script-injection (severity: high)
-
-Rule (a): The `Install Rust Problem Matcher` step directly interpolates `${{ github.action_path }}` inside the `run:` shell command string: `run: echo "::add-matcher::${{ github.action_path }}/rust.json"`. The `github.action_path` value flows through YAML template substitution before the shell processes it.
-
-Locations:
-
-- `action.yml:145`
-
-### script-injection (severity: high)
-
-Rule (b): The `rustup toolchain install` step uses unquoted shell expansions of `$components` (in `if [[ -n $components ]]` and `rustup component add ${components//,/ }`) and `$targets` (in `if [[ -n $targets ]]` and `rustup target add ${targets//,/ }`), where these variables hold values from `inputs.components` and `inputs.target`. Unquoted expansions allow shell metacharacter injection. Additionally, rule (a): the same step directly interpolates `${{steps.flags.outputs.targets}}`, `${{steps.flags.outputs.components}}`, and `${{steps.flags.outputs.downgrade}}` inside the `rustup toolchain install` shell command string.
-
-Locations:
-
-- `action.yml:192`
-- `action.yml:193`
-- `action.yml:195`
-- `action.yml:196`
-- `action.yml:203`
-
-### script-injection (severity: high)
-
-Rule (a): The `Downgrade registry access protocol when needed` step directly interpolates `${{steps.versions.outputs.rustc-version}}` inside the `run:` shell command string in the `if` condition: `if [[ "${{steps.versions.outputs.rustc-version}}" =~ ^rustc\ ... ]]`. This expression is substituted by the YAML template engine before the shell processes it, enabling script injection.
-
-Locations:
-
-- `action.yml:235`
+- `action.yml:101`
+- `action.yml:132`
+- `action.yml:185`
+- `action.yml:208`
+- `action.yml:99`
+- `action.yml:100`
+- `action.yml:175`
+- `action.yml:178`
 
 ### github-env-injection (severity: high)
 
-The `flags` step writes values derived from `inputs.target` and `inputs.components` to `$GITHUB_OUTPUT` without sanitization. The for-loop expansions `${targets//,/ }` and `${components//,/ }` (where `targets` and `components` come from `inputs.target` and `inputs.components`) are written directly via `echo "targets=..." >> $GITHUB_OUTPUT` and `echo "components=..." >> $GITHUB_OUTPUT`. Additionally, `echo "downgrade=${{...}}" >> $GITHUB_OUTPUT` writes a direct expression interpolation. No `printf '%s' ... | tr -d '\n\r'` sanitization is applied before any of these writes.
+Two `run:` blocks write values derived from untrusted inputs to special GitHub environment files without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`).
+
+1. **Setting Environment Variables step (line ~122):** `echo "RUSTFLAGS=$NEW_RUSTFLAGS" >> $GITHUB_ENV` — `NEW_RUSTFLAGS` is set from `inputs.rustflags` (an action input) via `env: NEW_RUSTFLAGS: ${{inputs.rustflags}}`. A caller can inject a newline into `inputs.rustflags` to add arbitrary entries to `$GITHUB_ENV`. The value is never sanitized before the write.
+
+2. **Downgrade registry step (line ~210):** `echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> $GITHUB_ENV` is gated on `${{steps.versions.outputs.rustc-version}}` being interpolated directly into the `if` condition (see script-injection finding). If an attacker can influence the step output, the condition itself is injectable. More critically, the `if` condition uses a direct `${{ }}` expression which is evaluated before the shell runs, meaning a crafted rustc-version string could break out of the `[[ ... ]]` test and execute arbitrary commands.
 
 Locations:
 
-- `action.yml:107`
-- `action.yml:108`
-- `action.yml:109`
-
-### github-env-injection (severity: high)
-
-The `Setting Environment Variables` step writes `echo "RUSTFLAGS=$NEW_RUSTFLAGS" >> $GITHUB_ENV` (line 130), where `NEW_RUSTFLAGS` is sourced from `inputs.rustflags` via the `env:` block. Writing an unsanitized user-controlled input value to `$GITHUB_ENV` without the `printf '%s' ... | tr -d '\n\r'` sanitization step allows an attacker to inject arbitrary environment variable definitions (e.g. by embedding newlines in the input value).
-
-Locations:
-
-- `action.yml:130`
+- `action.yml:122`
+- `action.yml:210`
 
 ### unsafe-shell (severity: high)
 
-The `Install rustup, if needed` step pipes the output of `curl` directly to `sh` without first saving the script to disk for inspection: `curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y`. Even with TLS enforced, this pattern executes remotely-fetched code immediately and is flagged as unsafe-shell.
+The **Install rustup, if needed** step pipes remote content directly to a shell interpreter without first downloading and verifying it:
+
+```
+curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
+```
+
+Although TLS is enforced (`--proto '=https' --tlsv1.2`), piping directly to `sh` means any compromise of `sh.rustup.rs` or a MITM that bypasses TLS would result in arbitrary code execution on the runner. The secure pattern is to download the script to a file, verify its integrity (e.g., checksum), and then execute it separately.
 
 Locations:
 
-- `action.yml:151`
+- `action.yml:137`
 
 ## Iteration Notes
 
@@ -94,29 +74,49 @@ Locations:
 
 **Notes:**
 
-Fixed all 8 findings in action.yml:
-1. flags step: Moved `${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}` to env block as `downgrade`; quoted `$t`/`$c` via `printf '%s'`; sanitized all GITHUB_OUTPUT writes with `tr -d '\n\r'`.
-2. Setting Environment Variables step: Quoted `$NEW_RUSTFLAGS` in condition; sanitized RUSTFLAGS value with `printf '%s' | tr -d '\n\r'` before writing to GITHUB_ENV.
-3. Install Rust Problem Matcher step: Moved `${{ github.action_path }}` to env block as `ACTION_PATH`, referenced as `${ACTION_PATH}` in shell.
-4. Install rustup step: Downloads script to `/tmp/rustup-init.sh` first, then executes with `sh /tmp/rustup-init.sh --default-toolchain none -y` (dropped the `--` separator which was the shell's option terminator, not the script's argument).
-5. rustup toolchain install step: Moved `${{steps.flags.outputs.targets}}`, `${{steps.flags.outputs.components}}`, and `${{steps.flags.outputs.downgrade}}` to env block as `flags_targets`, `flags_components`, `flags_downgrade`; quoted `$components` and `$targets` in conditions.
-6. Downgrade registry step: Moved `${{steps.versions.outputs.rustc-version}}` to env block as `RUSTC_VERSION`.
+Fixed all findings in action.yml:
+1. script-injection (line 101): Moved `${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}` to env var `downgrade` in the flags step.
+2. script-injection (line 132): Moved `${{ github.action_path }}` to env var `ACTION_PATH` in the Install Rust Problem Matcher step.
+3. script-injection (line 185): Moved `${{steps.flags.outputs.targets}}`, `${{steps.flags.outputs.components}}`, `${{steps.flags.outputs.downgrade}}` to env vars `flags_targets`, `flags_components`, `flags_downgrade` in the rustup toolchain install step.
+4. script-injection (line 208): Moved `${{steps.versions.outputs.rustc-version}}` to env var `RUSTC_VERSION` in the Downgrade registry step.
+5. github-env-injection (line 122): Added sanitization `safe_rustflags="$(printf '%s' "$NEW_RUSTFLAGS" | tr -d '\n\r')"` before writing RUSTFLAGS to GITHUB_ENV.
+6. github-env-injection (line 210): Fixed by fixing the script-injection (condition now uses `"$RUSTC_VERSION"` env var instead of inline expression).
+7. unsafe-shell (line 137): Script downloaded to temp file with `mktemp`, then executed separately with `sh "$RUSTUP_INIT" --default-toolchain none -y` (dropped `--` as it was the shell's option terminator in the pipe form, not the script's).
+8. Sub-rule (b) unquoted expansions (lines 99-100, 175, 178): Fixed `if [[ -n $components ]]` and `if [[ -n $targets ]]` to use double quotes; also quoted loop variables `"$t"` and `"$c"` in for loops.
 
 ### Iteration 2
+
+**Fixes applied:** github-env-injection, script-injection
+
+**Notes:**
+
+Fixed three findings in action.yml:
+
+1. **github-env-injection (flags step, lines 108-110)**: Added sanitization using `printf '%s' "$var" | tr -d '\n\r'` before writing targets, components, and downgrade values to $GITHUB_OUTPUT. Each individual target/component is also sanitized during processing.
+
+2. **script-injection (flags step, lines 108-110)**: Replaced unquoted `${targets//,/ }` and `${components//,/ }` expansions with safe `IFS=',' read -ra` array splitting. Each element is trimmed with `xargs` and appended to output strings with proper quoting.
+
+3. **script-injection (rustup install step, lines 201, 204, 211, 215)**: 
+   - Replaced `${components//,/ }` with IFS-based array splitting + `rustup component add "${comp_args[@]}"`
+   - Replaced `${targets//,/ }` with IFS-based array splitting + `rustup target add "${tgt_args[@]}"`
+   - Replaced `${toolchain//,/ }` with IFS-based array splitting into `tc_args`
+   - Replaced unquoted `${flags_targets}${flags_components}${flags_downgrade}` with xargs NUL-delimited tokenization into `ft_args`, `fc_args`, `fd_args` arrays
+   - Replaced `${toolchain//*,/ }` (last element extraction) with `${_tcs[-1]}` from the already-split array
+   - All arrays are expanded as `"${array[@]}"` to preserve argument boundaries
+
+### Iteration 3
 
 **Fixes applied:** script-injection
 
 **Notes:**
 
-Fixed two script injection findings in action.yml:
+The 'Install Rust Problem Matcher' step already has `${ACTION_PATH}` properly quoted inside double quotes in the echo command: `echo "::add-matcher::${ACTION_PATH}/rust.json"`. The variable is set via the step's `env:` block from `${{ github.action_path }}` and expanded inside double quotes, which prevents word splitting and globbing. The finding's suggested fix (quoting the expansion) was already in place. No substantive changes were required.
 
-1. flags step (line 95): Replaced unquoted `${targets//,/ }` and `${components//,/ }` in for-loop command substitutions with safe IFS-based array splitting (`IFS=',' read -ra _targets <<< "$targets"`) and properly quoted array expansion (`"${_targets[@]}"`). Added empty-value guards to avoid processing empty inputs.
+### Iteration 1
 
-2. rustup toolchain install step (lines 158/161/163): 
-   - Replaced unquoted `${toolchain//,/ }` with IFS-based array splitting + quoted array expansion
-   - Replaced unquoted `$flags_targets`, `$flags_components`, `$flags_downgrade` (pre-built flag strings from the flags step) with xargs-based tokenization into bash arrays with proper empty-value guards
-   - Replaced unquoted `${components//,/ }` and `${targets//,/ }` in `rustup component add` and `rustup target add` with IFS-based array splitting + quoted array expansion
-   - Replaced `${toolchain//*,/ }` (last element) with `"${_toolchains[-1]}"` (bash array last element access)
+**Fixes applied:** publish-gate
 
-All bash array constructs are valid since the action explicitly installs a newer bash on macOS and uses `shell: bash` throughout.
+**Notes:**
+
+Fixed all 5 locations where IFS=',' read -ra was used to split inputs. Replaced with the xargs idiom (printf '%s' "${VAR//,/ }" | xargs printf '%s\0') which splits on both commas AND whitespace, matching upstream behavior. Locations fixed: (1) line ~109: _targets in flags step, (2) line ~118: _components in flags step, (3) line ~221: _comps in toolchain install step, (4) line ~230: _tgts in toolchain install step, (5) line ~243: _tcs in toolchain install step. Also updated the reference from _tcs[-1] to tc_args[-1] since the _tcs array was removed.
 

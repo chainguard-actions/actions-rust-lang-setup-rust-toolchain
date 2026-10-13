@@ -24,3 +24,13 @@ jobs:
             exit 1
           fi
           echo "PASS"
+      - name: Assert cargo-version output is set
+        env:
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "cargo-version: $CARGO_VERSION"
+          if [ -z "$CARGO_VERSION" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
