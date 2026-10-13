@@ -6,17 +6,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Create a Rust source subdirectory
+      - name: Create rust source subdirectory
         run: |
-          mkdir -p rust-src
-          cat > rust-src/rust-toolchain.toml <<'EOF'
-          [toolchain]
-          channel = "stable"
-          EOF
+          mkdir -p hardened/tests/fixtures/rust-src
       - id: action
         uses: .
         with:
-          rust-src-dir: "rust-src"
+          toolchain: stable
+          rust-src-dir: hardened/tests/fixtures/rust-src
           cache: "false"
       - name: Assert rustc-version output is set
         env:
@@ -25,6 +22,26 @@ jobs:
           echo "rustc-version: $RUSTC_VERSION"
           if [ -z "$RUSTC_VERSION" ]; then
             echo "FAIL: rustc-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cargo-version output is set
+        env:
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
+        run: |
+          echo "cargo-version: $CARGO_VERSION"
+          if [ -z "$CARGO_VERSION" ]; then
+            echo "FAIL: cargo-version output is empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert rustup-version output is set
+        env:
+          RUSTUP_VERSION: ${{ steps.action.outputs.rustup-version }}
+        run: |
+          echo "rustup-version: $RUSTUP_VERSION"
+          if [ -z "$RUSTUP_VERSION" ]; then
+            echo "FAIL: rustup-version output is empty"
             exit 1
           fi
           echo "PASS"
