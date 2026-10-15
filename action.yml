@@ -129,24 +129,18 @@ runs:
       shell: bash
       run: |
         : construct rustup command line
-        _srt_safe_targets="$(printf '%s' "$_srt_targets" | tr -d '\n\r')"
-        _srt_safe_components="$(printf '%s' "$_srt_components" | tr -d '\n\r')"
-        _srt_safe_downgrade="$(printf '%s' "$_srt_downgrade" | tr -d '\n\r')"
-        _srt_targets_flags=""
-        IFS=',' read -ra _srt_target_arr <<< "$_srt_safe_targets"
-        for t in "${_srt_target_arr[@]}"; do
-          t="${t// /}"
-          [[ -n "$t" ]] && _srt_targets_flags+=" --target $t"
-        done
-        _srt_components_flags=""
-        IFS=',' read -ra _srt_component_arr <<< "$_srt_safe_components"
-        for c in "${_srt_component_arr[@]}"; do
-          c="${c// /}"
-          [[ -n "$c" ]] && _srt_components_flags+=" --component $c"
-        done
-        echo "targets=${_srt_targets_flags}" >> "$GITHUB_OUTPUT"
-        echo "components=${_srt_components_flags}" >> "$GITHUB_OUTPUT"
-        echo "downgrade=${_srt_safe_downgrade}" >> "$GITHUB_OUTPUT"
+        _srt_targets_safe=$(printf '%s' "$_srt_targets" | tr -d '\n\r')
+        _srt_components_safe=$(printf '%s' "$_srt_components" | tr -d '\n\r')
+        _srt_downgrade_safe=$(printf '%s' "$_srt_downgrade" | tr -d '\n\r')
+        targets_val=""
+        IFS=',' read -ra _srt_targets_arr <<< "$_srt_targets_safe"
+        for t in "${_srt_targets_arr[@]}"; do [[ -n "$t" ]] && targets_val="$targets_val --target $t"; done
+        components_val=""
+        IFS=',' read -ra _srt_components_arr <<< "$_srt_components_safe"
+        for c in "${_srt_components_arr[@]}"; do [[ -n "$c" ]] && components_val="$components_val --component $c"; done
+        echo "targets=$targets_val" >> $GITHUB_OUTPUT
+        echo "components=$components_val" >> $GITHUB_OUTPUT
+        echo "downgrade=$_srt_downgrade_safe" >> $GITHUB_OUTPUT
     # The environment variables always need to be set before the caching action
     - name: Setting Environment Variables
       env:
@@ -166,7 +160,7 @@ runs:
           echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
         fi
         if [[ ( ! -v RUSTFLAGS ) && $_srt_NEW_RUSTFLAGS != "" ]]; then
-          _srt_SAFE_RUSTFLAGS="$(printf '%s' "$_srt_NEW_RUSTFLAGS" | tr -d '\n\r')"
+          _srt_SAFE_RUSTFLAGS=$(printf '%s' "$_srt_NEW_RUSTFLAGS" | tr -d '\n\r')
           echo "RUSTFLAGS=$_srt_SAFE_RUSTFLAGS" >> $GITHUB_ENV
         fi
         # Enable faster sparse index on nightly
@@ -183,7 +177,8 @@ runs:
       env:
         _srt_action_path: ${{ github.action_path }}
       shell: bash
-      run: echo "::add-matcher::${_srt_action_path}/rust.json"
+      run: |
+        echo "::add-matcher::${_srt_action_path}/rust.json"
     - name: Install rustup, if needed
       shell: bash
       run: |
@@ -235,16 +230,16 @@ runs:
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
           if [[ -n "$_srt_components" ]]; then
-            _srt_comp_arr=()
-            while IFS= read -r -d '' _c; do _srt_comp_arr+=("$_c"); done \
+            _srt_components_arr=()
+            while IFS= read -r -d '' t; do _srt_components_arr+=("$t"); done \
               < <(printf '%s' "${_srt_components//,/ }" | xargs -r printf '%s\0')
-            rustup component add "${_srt_comp_arr[@]}"
+            rustup component add "${_srt_components_arr[@]}"
           fi
           if [[ -n "$_srt_targets" ]]; then
-            _srt_tgt_arr=()
-            while IFS= read -r -d '' _t; do _srt_tgt_arr+=("$_t"); done \
+            _srt_targets_arr=()
+            while IFS= read -r -d '' t; do _srt_targets_arr+=("$t"); done \
               < <(printf '%s' "${_srt_targets//,/ }" | xargs -r printf '%s\0')
-            rustup target add "${_srt_tgt_arr[@]}"
+            rustup target add "${_srt_targets_arr[@]}"
           fi
         else
           if [[ -z "$_srt_toolchain" ]]
@@ -252,20 +247,23 @@ runs:
             _srt_toolchain=stable
           fi
           _srt_toolchain_arr=()
-          while IFS= read -r -d '' _tc; do _srt_toolchain_arr+=("$_tc"); done \
+          while IFS= read -r -d '' t; do _srt_toolchain_arr+=("$t"); done \
             < <(printf '%s' "${_srt_toolchain//,/ }" | xargs -r printf '%s\0')
-          _srt_install_args=()
-          if [ -n "$_srt_flags_targets" ]; then
-            while IFS= read -r -d '' _t; do _srt_install_args+=("$_t"); done \
-              < <(printf '%s' "$_srt_flags_targets" | xargs -r printf '%s\0')
+          _srt_tc_flags=()
+          if [[ -n "$_srt_flags_targets" ]]; then
+            IFS=' ' read -ra _srt_ft_arr <<< "${_srt_flags_targets# }"
+            for _srt_tok in "${_srt_ft_arr[@]}"; do [[ -n "$_srt_tok" ]] && _srt_tc_flags+=("$_srt_tok"); done
           fi
-          if [ -n "$_srt_flags_components" ]; then
-            while IFS= read -r -d '' _c; do _srt_install_args+=("$_c"); done \
-              < <(printf '%s' "$_srt_flags_components" | xargs -r printf '%s\0')
+          if [[ -n "$_srt_flags_components" ]]; then
+            IFS=' ' read -ra _srt_fc_arr <<< "${_srt_flags_components# }"
+            for _srt_tok in "${_srt_fc_arr[@]}"; do [[ -n "$_srt_tok" ]] && _srt_tc_flags+=("$_srt_tok"); done
           fi
-          _srt_downgrade_args=()
-          [[ -n "$_srt_flags_downgrade" ]] && _srt_downgrade_args+=(--allow-downgrade)
-          rustup toolchain install "${_srt_toolchain_arr[@]}" "${_srt_install_args[@]}" --profile minimal "${_srt_downgrade_args[@]}" --no-self-update
+          _srt_downgrade_flags=()
+          if [[ -n "$_srt_flags_downgrade" ]]; then
+            IFS=' ' read -ra _srt_fd_arr <<< "${_srt_flags_downgrade# }"
+            for _srt_tok in "${_srt_fd_arr[@]}"; do [[ -n "$_srt_tok" ]] && _srt_downgrade_flags+=("$_srt_tok"); done
+          fi
+          rustup toolchain install "${_srt_toolchain_arr[@]}" "${_srt_tc_flags[@]}" --profile minimal "${_srt_downgrade_flags[@]}" --no-self-update
           # Take the last element from the list
           if [[ "$_srt_override" == "true" ]]
           then
