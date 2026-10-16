@@ -2,9 +2,11 @@ name: Setup Rust Toolchain for GitHub CI
 description: |
   Setup specific Rust versions with caching pre-configured.
   It provides problem matchers for cargo and rustfmt issues.
+
 branding:
   icon: "play"
   color: "gray-dark"
+
 # Add option to install directly from rust-toolchain file
 # Blocked on rustup support: https://github.com/rust-lang/rustup/issues/2686
 #
@@ -70,6 +72,7 @@ inputs:
   rust-src-dir:
     description: "Specify path from root directory to the Rust source directory. By default root directory will be used."
     required: false
+
 outputs:
   rustc-version:
     description: "Version as reported by `rustc --version`"
@@ -83,6 +86,7 @@ outputs:
   cachekey:
     description: A short hash of the rustc version, appropriate for use as a cache key. "20220627a831"
     value: ${{steps.versions.outputs.cachekey}}
+
 runs:
   using: composite
   steps:
@@ -109,34 +113,39 @@ runs:
       run: |
         brew install bash
       shell: bash
+
     - id: flags
       env:
         targets: ${{inputs.target}}
         components: ${{inputs.components}}
-        downgrade: ${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}
+        toolchain: ${{inputs.toolchain}}
       shell: bash
       run: |
         : construct rustup command line
-        raw_targets=""
+        targets_flags=""
         if [[ -n "$targets" ]]; then
-          tgt_arr=()
-          while IFS= read -r -d '' t; do tgt_arr+=("$t"); done \
-            < <(printf '%s' "${targets//,/ }" | xargs printf '%s\0')
-          for t in "${tgt_arr[@]}"; do raw_targets="$raw_targets --target $t"; done
+          _targets=(); while IFS= read -r -d '' _t; do _targets+=("$_t"); done < <(printf '%s' "${targets//,/ }" | xargs -r printf '%s\0')
+          for t in "${_targets[@]}"; do
+            targets_flags="$targets_flags --target $t"
+          done
         fi
-        safe_targets="$(printf '%s' "$raw_targets" | tr -d '\n\r')"
+        safe_targets="$(printf '%s' "$targets_flags" | tr -d '\n\r')"
         echo "targets=$safe_targets" >> $GITHUB_OUTPUT
-        raw_components=""
+        components_flags=""
         if [[ -n "$components" ]]; then
-          cmp_arr=()
-          while IFS= read -r -d '' c; do cmp_arr+=("$c"); done \
-            < <(printf '%s' "${components//,/ }" | xargs printf '%s\0')
-          for c in "${cmp_arr[@]}"; do raw_components="$raw_components --component $c"; done
+          _components=(); while IFS= read -r -d '' _c; do _components+=("$_c"); done < <(printf '%s' "${components//,/ }" | xargs -r printf '%s\0')
+          for c in "${_components[@]}"; do
+            components_flags="$components_flags --component $c"
+          done
         fi
-        safe_components="$(printf '%s' "$raw_components" | tr -d '\n\r')"
+        safe_components="$(printf '%s' "$components_flags" | tr -d '\n\r')"
         echo "components=$safe_components" >> $GITHUB_OUTPUT
-        safe_downgrade="$(printf '%s' "$downgrade" | tr -d '\n\r')"
-        echo "downgrade=$safe_downgrade" >> $GITHUB_OUTPUT
+        if [[ "$toolchain" == *nightly* && -n "$components" ]]; then
+          echo "downgrade= --allow-downgrade" >> $GITHUB_OUTPUT
+        else
+          echo "downgrade=" >> $GITHUB_OUTPUT
+        fi
+
     # The environment variables always need to be set before the caching action
     - name: Setting Environment Variables
       env:
@@ -155,7 +164,7 @@ runs:
         if [[ ! -v RUST_BACKTRACE ]]; then
           echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
         fi
-        if [[ ( ! -v RUSTFLAGS ) && "$NEW_RUSTFLAGS" != "" ]]; then
+        if [[ ( ! -v RUSTFLAGS ) && $NEW_RUSTFLAGS != "" ]]; then
           safe_rustflags="$(printf '%s' "$NEW_RUSTFLAGS" | tr -d '\n\r')"
           echo "RUSTFLAGS=$safe_rustflags" >> $GITHUB_ENV
         fi
@@ -168,20 +177,22 @@ runs:
         if [[ ! -v CARGO_REGISTRIES_CRATES_IO_PROTOCOL ]]; then
           echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse" >> $GITHUB_ENV
         fi
+
     - name: Install Rust Problem Matcher
       if: inputs.matcher == 'true'
       env:
         ACTION_PATH: ${{ github.action_path }}
       shell: bash
       run: echo "::add-matcher::$ACTION_PATH/rust.json"
+
     - name: Install rustup, if needed
       shell: bash
       run: |
         if ! command -v rustup &> /dev/null ; then
-          RUSTUP_INIT_SCRIPT="$(mktemp)"
-          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o "$RUSTUP_INIT_SCRIPT"
-          sh "$RUSTUP_INIT_SCRIPT" --default-toolchain none -y
-          rm -f "$RUSTUP_INIT_SCRIPT"
+          RUSTUP_INIT=$(mktemp)
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" -o "$RUSTUP_INIT"
+          sh "$RUSTUP_INIT" --default-toolchain none -y
+          rm -f "$RUSTUP_INIT"
 
           # Resolve the correct CARGO_HOME path depending on OS
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -192,6 +203,7 @@ runs:
         fi
       env:
         RUNNER_OS: "${{ runner.os }}"
+
     - name: rustup toolchain install ${{inputs.toolchain || 'stable'}}
       env:
         toolchain: ${{inputs.toolchain}}
@@ -199,9 +211,9 @@ runs:
         components: ${{inputs.components}}
         override: ${{inputs.override}}
         rust_src_dir: ${{inputs.rust-src-dir}}
-        flag_targets: ${{steps.flags.outputs.targets}}
-        flag_components: ${{steps.flags.outputs.components}}
-        flag_downgrade: ${{steps.flags.outputs.downgrade}}
+        flags_targets: ${{steps.flags.outputs.targets}}
+        flags_components: ${{steps.flags.outputs.components}}
+        flags_downgrade: ${{steps.flags.outputs.downgrade}}
       shell: bash
       run: |
         # Check if value is set
@@ -224,47 +236,31 @@ runs:
           # rustup toolchain install is the new explicit way
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
-          if [[ -n "$components" ]]; then
-            comp_arr=()
-            while IFS= read -r -d '' c; do comp_arr+=("$c"); done \
-              < <(printf '%s' "${components//,/ }" | xargs printf '%s\0')
-            rustup component add "${comp_arr[@]}"
+          if [[ -n $components ]]; then
+            _components=(); while IFS= read -r -d '' _c; do _components+=("$_c"); done < <(printf '%s' "${components//,/ }" | xargs -r printf '%s\0')
+            rustup component add "${_components[@]}"
           fi
-          if [[ -n "$targets" ]]; then
-            tgt_arr=()
-            while IFS= read -r -d '' t; do tgt_arr+=("$t"); done \
-              < <(printf '%s' "${targets//,/ }" | xargs printf '%s\0')
-            rustup target add "${tgt_arr[@]}"
+          if [[ -n $targets ]]; then
+            _targets=(); while IFS= read -r -d '' _t; do _targets+=("$_t"); done < <(printf '%s' "${targets//,/ }" | xargs -r printf '%s\0')
+            rustup target add "${_targets[@]}"
           fi
         else
           if [[ -z "$toolchain" ]]
           then
             toolchain=stable
           fi
-          tc_arr=()
-          while IFS= read -r -d '' t; do tc_arr+=("$t"); done \
-            < <(printf '%s' "${toolchain//,/ }" | xargs printf '%s\0')
-          extra_flags=()
-          if [[ -n "$flag_targets" ]]; then
-            while IFS= read -r -d '' tok; do extra_flags+=("$tok"); done \
-              < <(printf '%s' "$flag_targets" | xargs printf '%s\0')
-          fi
-          if [[ -n "$flag_components" ]]; then
-            while IFS= read -r -d '' tok; do extra_flags+=("$tok"); done \
-              < <(printf '%s' "$flag_components" | xargs printf '%s\0')
-          fi
-          downgrade_flags=()
-          if [[ -n "$flag_downgrade" ]]; then
-            while IFS= read -r -d '' tok; do downgrade_flags+=("$tok"); done \
-              < <(printf '%s' "$flag_downgrade" | xargs printf '%s\0')
-          fi
-          rustup toolchain install "${tc_arr[@]}" "${extra_flags[@]}" --profile minimal "${downgrade_flags[@]}" --no-self-update
+          _toolchains=(); while IFS= read -r -d '' _tc; do _toolchains+=("$_tc"); done < <(printf '%s' "${toolchain//,/ }" | xargs -r printf '%s\0')
+          _ft=(); if [[ -n "$flags_targets" ]]; then while IFS= read -r -d '' _t; do _ft+=("$_t"); done < <(printf '%s' "$flags_targets" | xargs -r printf '%s\0'); fi
+          _fc=(); if [[ -n "$flags_components" ]]; then while IFS= read -r -d '' _c; do _fc+=("$_c"); done < <(printf '%s' "$flags_components" | xargs -r printf '%s\0'); fi
+          _fd=(); if [[ -n "$flags_downgrade" ]]; then while IFS= read -r -d '' _d; do _fd+=("$_d"); done < <(printf '%s' "$flags_downgrade" | xargs -r printf '%s\0'); fi
+          rustup toolchain install "${_toolchains[@]}" "${_ft[@]}" "${_fc[@]}" --profile minimal "${_fd[@]}" --no-self-update
           # Take the last element from the list
           if [[ "$override" == "true" ]]
           then
-            rustup override set "${tc_arr[-1]}"
+            rustup override set "${_toolchains[-1]}"
           fi
         fi
+
     - id: versions
       name: Print installed versions
       shell: bash
@@ -281,6 +277,7 @@ runs:
         DATE=$(rustc --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')
         HASH=$(rustc --version --verbose | sed -ne 's/^commit-hash: //p')
         echo "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT
+
     - name: Downgrade registry access protocol when needed
       env:
         RUSTC_VERSION: ${{steps.versions.outputs.rustc-version}}
@@ -294,6 +291,7 @@ runs:
           echo "Downgrade cargo registry protocol to git"
           echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git" >> $GITHUB_ENV
         fi
+
     - name: Setup Rust Caching
       if: inputs.cache == 'true'
       uses: chainguard-actions/swatinem-rust-cache@fd6b22139d13e3058505dd576ae91974b7321dca # v2.8.2
