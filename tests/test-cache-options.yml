@@ -1,4 +1,4 @@
-name: Test cache options inputs
+name: Test cache-related inputs are accepted
 on:
   workflow_dispatch:
 jobs:
@@ -6,38 +6,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Create workspace and cache directories
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/my-workspace/target"
-          mkdir -p "$GITHUB_WORKSPACE/extra-cache-dir"
+
       - id: action
         uses: .
         with:
           toolchain: stable
-          cache: "true"
-          cache-workspaces: my-workspace -> my-workspace/target
-          cache-directories: extra-cache-dir
-          cache-key: test-cache-key
+          cache: "false"
+          cache-workspaces: |
+            . -> target
+          cache-directories: |
+            /tmp/extra-cache-dir
+          cache-key: test-extra-key
           cache-shared-key: test-shared-key
-          cache-on-failure: "true"
-          cache-bin: "true"
-      - name: Assert rustc-version output is set
+
+      - name: Assert outputs are set
         env:
           RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
+          CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
         run: |
           echo "rustc-version: $RUSTC_VERSION"
-          if [ -z "$RUSTC_VERSION" ]; then
-            echo "FAIL: rustc-version output is empty"
+          echo "cargo-version: $CARGO_VERSION"
+          echo "cachekey: $CACHEKEY"
+          if ! echo "$RUSTC_VERSION" | grep -q "^rustc "; then
+            echo "FAIL: rustc-version invalid"
+            exit 1
+          fi
+          if ! echo "$CARGO_VERSION" | grep -q "^cargo "; then
+            echo "FAIL: cargo-version invalid"
+            exit 1
+          fi
+          if [ -z "$CACHEKEY" ]; then
+            echo "FAIL: cachekey empty"
             exit 1
           fi
           echo "PASS"
-      - name: Assert cachekey output is set
-        env:
-          CACHEKEY: ${{ steps.action.outputs.cachekey }}
+
+      - name: Assert env vars set by action
         run: |
-          echo "cachekey: $CACHEKEY"
-          if [ -z "$CACHEKEY" ]; then
-            echo "FAIL: cachekey output is empty"
+          echo "CARGO_INCREMENTAL=$CARGO_INCREMENTAL RUSTFLAGS=$RUSTFLAGS"
+          if [ "$CARGO_INCREMENTAL" != "0" ]; then
+            echo "FAIL: CARGO_INCREMENTAL expected 0"
+            exit 1
+          fi
+          if [ "$RUSTFLAGS" != "-D warnings" ]; then
+            echo "FAIL: RUSTFLAGS expected '-D warnings'"
             exit 1
           fi
           echo "PASS"

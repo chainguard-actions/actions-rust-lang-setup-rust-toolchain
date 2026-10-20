@@ -1,0 +1,69 @@
+name: Test environment variables are set correctly
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          rustflags: ""
+          cache: "false"
+
+      - name: Assert CARGO_INCREMENTAL is set to 0
+        run: |
+          echo "CARGO_INCREMENTAL: $CARGO_INCREMENTAL"
+          if [ "$CARGO_INCREMENTAL" != "0" ]; then
+            echo "FAIL: expected CARGO_INCREMENTAL=0 but got: $CARGO_INCREMENTAL"
+            exit 1
+          fi
+          echo "PASS: CARGO_INCREMENTAL=$CARGO_INCREMENTAL"
+
+      - name: Assert CARGO_PROFILE_DEV_DEBUG is set to 0
+        run: |
+          echo "CARGO_PROFILE_DEV_DEBUG: $CARGO_PROFILE_DEV_DEBUG"
+          if [ "$CARGO_PROFILE_DEV_DEBUG" != "0" ]; then
+            echo "FAIL: expected CARGO_PROFILE_DEV_DEBUG=0 but got: $CARGO_PROFILE_DEV_DEBUG"
+            exit 1
+          fi
+          echo "PASS: CARGO_PROFILE_DEV_DEBUG=$CARGO_PROFILE_DEV_DEBUG"
+
+      - name: Assert CARGO_TERM_COLOR is set to always
+        run: |
+          echo "CARGO_TERM_COLOR: $CARGO_TERM_COLOR"
+          if [ "$CARGO_TERM_COLOR" != "always" ]; then
+            echo "FAIL: expected CARGO_TERM_COLOR=always but got: $CARGO_TERM_COLOR"
+            exit 1
+          fi
+          echo "PASS: CARGO_TERM_COLOR=$CARGO_TERM_COLOR"
+
+      - name: Assert RUST_BACKTRACE is set to short
+        run: |
+          echo "RUST_BACKTRACE: $RUST_BACKTRACE"
+          if [ "$RUST_BACKTRACE" != "short" ]; then
+            echo "FAIL: expected RUST_BACKTRACE=short but got: $RUST_BACKTRACE"
+            exit 1
+          fi
+          echo "PASS: RUST_BACKTRACE=$RUST_BACKTRACE"
+
+      - name: Assert RUSTFLAGS is not set when rustflags input is empty
+        run: |
+          echo "RUSTFLAGS: '$RUSTFLAGS'"
+          if [ -n "$RUSTFLAGS" ]; then
+            echo "FAIL: expected RUSTFLAGS to be empty but got: $RUSTFLAGS"
+            exit 1
+          fi
+          echo "PASS: RUSTFLAGS is empty as expected"
+
+      - name: Assert CARGO_REGISTRIES_CRATES_IO_PROTOCOL is set
+        run: |
+          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL: $CARGO_REGISTRIES_CRATES_IO_PROTOCOL"
+          if [ -z "$CARGO_REGISTRIES_CRATES_IO_PROTOCOL" ]; then
+            echo "FAIL: CARGO_REGISTRIES_CRATES_IO_PROTOCOL is not set"
+            exit 1
+          fi
+          echo "PASS: CARGO_REGISTRIES_CRATES_IO_PROTOCOL=$CARGO_REGISTRIES_CRATES_IO_PROTOCOL"

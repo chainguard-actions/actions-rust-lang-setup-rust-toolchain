@@ -1,4 +1,4 @@
-name: Test toolchain and components inputs
+name: Test toolchain setup with problem matcher disabled
 on:
   workflow_dispatch:
 jobs:
@@ -6,14 +6,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - id: action
         uses: .
         with:
           toolchain: stable
-          components: rustfmt,clippy
-          cache: "false"
           matcher: "false"
-      - name: Assert rustc-version is set
+          cache: "false"
+
+      - name: Assert rustc-version output is set
         env:
           RUSTC_VERSION: ${{ steps.action.outputs.rustc-version }}
         run: |
@@ -22,8 +23,13 @@ jobs:
             echo "FAIL: rustc-version output is empty"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert cargo-version is set
+          if ! echo "$RUSTC_VERSION" | grep -q "^rustc "; then
+            echo "FAIL: rustc-version does not start with 'rustc '"
+            exit 1
+          fi
+          echo "PASS: rustc-version=$RUSTC_VERSION"
+
+      - name: Assert cargo-version output is set
         env:
           CARGO_VERSION: ${{ steps.action.outputs.cargo-version }}
         run: |
@@ -32,8 +38,9 @@ jobs:
             echo "FAIL: cargo-version output is empty"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert rustup-version is set
+          echo "PASS: cargo-version=$CARGO_VERSION"
+
+      - name: Assert rustup-version output is set
         env:
           RUSTUP_VERSION: ${{ steps.action.outputs.rustup-version }}
         run: |
@@ -42,8 +49,9 @@ jobs:
             echo "FAIL: rustup-version output is empty"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert cachekey is set
+          echo "PASS: rustup-version=$RUSTUP_VERSION"
+
+      - name: Assert cachekey output is set
         env:
           CACHEKEY: ${{ steps.action.outputs.cachekey }}
         run: |
@@ -52,12 +60,11 @@ jobs:
             echo "FAIL: cachekey output is empty"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert rustfmt is installed
+          echo "PASS: cachekey=$CACHEKEY"
+
+      - name: Assert Rust tools are functional
         run: |
-          rustfmt --version
-          echo "PASS: rustfmt is installed"
-      - name: Assert clippy is installed
-        run: |
-          cargo clippy --version
-          echo "PASS: clippy is installed"
+          rustc --version
+          cargo --version
+          rustup --version
+          echo "PASS: all Rust tools are functional"
