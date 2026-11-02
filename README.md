@@ -17,6 +17,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v1.16.1 | [`v1.16.1`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.16.1) | [`46268bd`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/46268bd060767258de96ed93c1251119784f2ab6) | [`HARDENING.md`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/blob/v1.16.1/HARDENING.md) |
 | v1.17.0 | [`v1.17.0`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v1.17.0) | [`166cdcf`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/166cdcfd11aee3cb47222f9ddb555ce30ddb9659) | [`HARDENING.md`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/blob/v1.17.0/HARDENING.md) |
 | v2.0.0 | [`v2.0.0`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v2.0.0) | [`ecabd13`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/ecabd13d1c56bd1345c230e542e9144811ad706f) | [`HARDENING.md`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/blob/v2.0.0/HARDENING.md) |
+| v2.0.1 | [`v2.0.1`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/tree/v2.0.1) | [`a188e68`](https://github.com/actions-rust-lang/setup-rust-toolchain/commit/a188e68d0fd2bd36ad51dccb2b07ba6e75105f30) | [`HARDENING.md`](https://github.com/chainguard-actions/actions-rust-lang-setup-rust-toolchain/blob/v2.0.1/HARDENING.md) |
 
 ## Privacy
 
