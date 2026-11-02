@@ -1,0 +1,46 @@
+name: Test basic stable install
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          toolchain: stable
+          cache: "false"
+      - name: Assert outputs
+        env:
+          RUSTC: ${{ steps.action.outputs.rustc-version }}
+          CARGO: ${{ steps.action.outputs.cargo-version }}
+          RUSTUP: ${{ steps.action.outputs.rustup-version }}
+          CACHEKEY: ${{ steps.action.outputs.cachekey }}
+        run: |
+          echo "rustc: $RUSTC"; echo "cargo: $CARGO"; echo "rustup: $RUSTUP"; echo "cachekey: $CACHEKEY"
+          case "$RUSTC" in rustc\ 1.*) ;; *) echo "FAIL: bad rustc-version"; exit 1;; esac
+          case "$CARGO" in cargo\ 1.*) ;; *) echo "FAIL: bad cargo-version"; exit 1;; esac
+          case "$RUSTUP" in rustup\ *) ;; *) echo "FAIL: bad rustup-version"; exit 1;; esac
+          if ! echo "$CACHEKEY" | grep -qE '^20[0-9]{6}[0-9a-f]{4}$'; then
+            echo "FAIL: bad cachekey"; exit 1
+          fi
+          echo "PASS"
+      - name: Assert environment
+        run: |
+          env | grep -E '^(CARGO_|RUST)' || true
+          fail=0
+          [ "$CARGO_INCREMENTAL" = "0" ] || { echo "FAIL: CARGO_INCREMENTAL=$CARGO_INCREMENTAL"; fail=1; }
+          [ "$CARGO_PROFILE_DEV_DEBUG" = "0" ] || { echo "FAIL: CARGO_PROFILE_DEV_DEBUG"; fail=1; }
+          [ "$CARGO_TERM_COLOR" = "always" ] || { echo "FAIL: CARGO_TERM_COLOR"; fail=1; }
+          [ "$RUST_BACKTRACE" = "short" ] || { echo "FAIL: RUST_BACKTRACE"; fail=1; }
+          [ "$CARGO_BUILD_WARNINGS" = "deny" ] || { echo "FAIL: CARGO_BUILD_WARNINGS"; fail=1; }
+          [ "$CARGO_REGISTRIES_CRATES_IO_PROTOCOL" = "sparse" ] || { echo "FAIL: protocol"; fail=1; }
+          [ -z "${RUSTFLAGS+x}" ] || { echo "FAIL: RUSTFLAGS should be unset, got '$RUSTFLAGS'"; fail=1; }
+          [ "$fail" = 0 ] || exit 1
+          echo "PASS"
+      - name: Assert cargo works
+        run: |
+          cargo --version
+          rustc --version
+          echo "PASS"

@@ -1,0 +1,20 @@
+name: Test toolchain file in rust-src-dir
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          cache: "false"
+          rust-src-dir: tests/fixtures/rust-project
+      - name: Assert toolchain from file
+        env:
+          ACTUAL: ${{ steps.action.outputs.rustc-version }}
+        run: |
+          echo "actual: $ACTUAL"
+          case "$ACTUAL" in rustc\ 1.76.0*) ;; *) echo "FAIL: expected rustc 1.76.0"; exit 1;; esac
+          echo "PASS"
