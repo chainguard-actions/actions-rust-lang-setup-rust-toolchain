@@ -130,6 +130,37 @@ runs:
         brew install bash
       shell: bash
 
+    - id: flags
+      env:
+        _srt_targets: ${{inputs.target}}
+        _srt_components: ${{inputs.components}}
+        _srt_downgrade: ${{ (contains(inputs.toolchain, 'nightly') && inputs.components) && 'true' || '' }}
+      shell: bash
+      run: |
+        : construct rustup command line
+        _srt_t_list=()
+        if [[ -n "$_srt_targets" ]]; then
+          read -r -d '' -a _srt_t_list <<< "${_srt_targets//,/ }" || true
+        fi
+        _srt_c_list=()
+        if [[ -n "$_srt_components" ]]; then
+          read -r -d '' -a _srt_c_list <<< "${_srt_components//,/ }" || true
+        fi
+        _srt_out_targets=""
+        for _srt_t in "${_srt_t_list[@]}"; do _srt_out_targets+=" --target ${_srt_t}"; done
+        _srt_out_components=""
+        for _srt_c in "${_srt_c_list[@]}"; do _srt_out_components+=" --component ${_srt_c}"; done
+        _srt_out_downgrade=""
+        if [[ "$_srt_downgrade" == "true" ]]; then
+          _srt_out_downgrade=" --allow-downgrade"
+        fi
+        _srt_safe=$(printf '%s' "$_srt_out_targets" | tr -d '\n\r')
+        printf 'targets=%s\n' "$_srt_safe" >> "$GITHUB_OUTPUT"
+        _srt_safe=$(printf '%s' "$_srt_out_components" | tr -d '\n\r')
+        printf 'components=%s\n' "$_srt_safe" >> "$GITHUB_OUTPUT"
+        _srt_safe=$(printf '%s' "$_srt_out_downgrade" | tr -d '\n\r')
+        printf 'downgrade=%s\n' "$_srt_safe" >> "$GITHUB_OUTPUT"
+
     # The environment variables always need to be set before the caching action
     - name: Setting Environment Variables
       env:
@@ -206,6 +237,7 @@ runs:
         _srt_downgrade: ${{ (contains(inputs.toolchain, 'nightly') && inputs.components) && 'true' || '' }}
       shell: bash
       run: |
+        # Split comma/whitespace separated lists into arrays (same splitting as upstream's unquoted ${VAR//,/ })
         _srt_t_list=()
         if [[ -n "$_srt_targets" ]]; then
           read -r -d '' -a _srt_t_list <<< "${_srt_targets//,/ }" || true
@@ -227,10 +259,12 @@ runs:
             exit 1
           fi
         fi
-        if [[ -z "$_srt_toolchain" && ( -f "rust-toolchain" || -f "rust-toolchain.toml" ) ]]
+        if [[ -z "$_srt_toolchain" && ( -f "rust-toolchain" || -f "rust-toolchain.toml") ]]
         then
           # Install the toolchain as specified in the file
-          # rustup 1.28+ no longer installs automatically on `rustup show`
+          # rustup show is the old way that implicitly installed a toolchain
+          # rustup toolchain install is the new explicit way
+          # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
           if [[ ${#_srt_c_list[@]} -gt 0 ]]; then
             rustup component add "${_srt_c_list[@]}"
@@ -246,18 +280,23 @@ runs:
           _srt_tc_list=()
           read -r -d '' -a _srt_tc_list <<< "${_srt_toolchain//,/ }" || true
           _srt_args=()
-          for t in "${_srt_t_list[@]}"; do _srt_args+=(--target "$t"); done
-          for c in "${_srt_c_list[@]}"; do _srt_args+=(--component "$c"); done
+          for _srt_t in "${_srt_t_list[@]}"; do _srt_args+=(--target "$_srt_t"); done
+          for _srt_c in "${_srt_c_list[@]}"; do _srt_args+=(--component "$_srt_c"); done
           _srt_args+=(--profile minimal)
-          if [[ "$_srt_downgrade" == "true" ]]; then _srt_args+=(--allow-downgrade); fi
+          if [[ "$_srt_downgrade" == "true" ]]; then
+            _srt_args+=(--allow-downgrade)
+          fi
           _srt_args+=(--no-self-update)
           rustup toolchain install "${_srt_tc_list[@]}" "${_srt_args[@]}"
           # Take the last element from the list
           if [[ "$_srt_override" == "true" ]]
           then
-            _srt_last=()
-            read -r -d '' -a _srt_last <<< "${_srt_toolchain//*,/ }" || true
-            rustup override set "${_srt_last[@]}"
+            _srt_last_list=()
+            _srt_last="${_srt_toolchain##*,}"
+            if [[ -n "$_srt_last" ]]; then
+              read -r -d '' -a _srt_last_list <<< "$_srt_last" || true
+            fi
+            rustup override set "${_srt_last_list[@]}"
           fi
         fi
 
