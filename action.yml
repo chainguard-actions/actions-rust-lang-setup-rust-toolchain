@@ -139,20 +139,24 @@ runs:
       run: |
         : construct rustup command line
         _srt_targets_flags=""
+        _srt_list=()
         if [[ -n "$_srt_targets" ]]; then
-          while IFS= read -r -d '' _srt_t; do
-            _srt_targets_flags="${_srt_targets_flags} --target ${_srt_t}"
-          done < <(printf '%s' "${_srt_targets//,/ }" | xargs -r printf '%s\0')
+          read -r -d '' -a _srt_list <<< "${_srt_targets//,/ }" || true
         fi
+        for _srt_t in ${_srt_list[@]+"${_srt_list[@]}"}; do
+          _srt_targets_flags="${_srt_targets_flags} --target ${_srt_t}"
+        done
         _srt_safe_targets="$(printf '%s' "$_srt_targets_flags" | tr -d '\n\r')"
         echo "targets=${_srt_safe_targets}" >> "$GITHUB_OUTPUT"
 
         _srt_components_flags=""
+        _srt_list=()
         if [[ -n "$_srt_components" ]]; then
-          while IFS= read -r -d '' _srt_c; do
-            _srt_components_flags="${_srt_components_flags} --component ${_srt_c}"
-          done < <(printf '%s' "${_srt_components//,/ }" | xargs -r printf '%s\0')
+          read -r -d '' -a _srt_list <<< "${_srt_components//,/ }" || true
         fi
+        for _srt_c in ${_srt_list[@]+"${_srt_list[@]}"}; do
+          _srt_components_flags="${_srt_components_flags} --component ${_srt_c}"
+        done
         _srt_safe_components="$(printf '%s' "$_srt_components_flags" | tr -d '\n\r')"
         echo "components=${_srt_safe_components}" >> "$GITHUB_OUTPUT"
 
@@ -178,13 +182,13 @@ runs:
         if [[ ! -v RUST_BACKTRACE ]]; then
           echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
         fi
-        if [[ ( ! -v RUSTFLAGS ) && $_srt_NEW_RUSTFLAGS != "" ]]; then
+        if [[ ( ! -v RUSTFLAGS ) && "$_srt_NEW_RUSTFLAGS" != "" ]]; then
           _srt_SAFE_RUSTFLAGS="$(printf '%s' "$_srt_NEW_RUSTFLAGS" | tr -d '\n\r')"
-          echo "RUSTFLAGS=${_srt_SAFE_RUSTFLAGS}" >> $GITHUB_ENV
+          echo "RUSTFLAGS=${_srt_SAFE_RUSTFLAGS}" >> "$GITHUB_ENV"
         fi
-        if [[ ( ! -v CARGO_BUILD_WARNINGS ) && $_srt_CARGO_BUILD_WARNINGS != "" ]]; then
+        if [[ ( ! -v CARGO_BUILD_WARNINGS ) && "$_srt_CARGO_BUILD_WARNINGS" != "" ]]; then
           _srt_SAFE_CARGO_BUILD_WARNINGS="$(printf '%s' "$_srt_CARGO_BUILD_WARNINGS" | tr -d '\n\r')"
-          echo "CARGO_BUILD_WARNINGS=${_srt_SAFE_CARGO_BUILD_WARNINGS}" >> $GITHUB_ENV
+          echo "CARGO_BUILD_WARNINGS=${_srt_SAFE_CARGO_BUILD_WARNINGS}" >> "$GITHUB_ENV"
         fi
         # Enable faster sparse index on nightly
         # The value is ignored on stable and causes no problems
@@ -198,10 +202,8 @@ runs:
 
     - name: Install Rust Problem Matcher
       if: inputs.matcher == 'true'
-      env:
-        _srt_action_path: ${{ github.action_path }}
       shell: bash
-      run: echo "::add-matcher::${_srt_action_path}/rust.json"
+      run: echo "::add-matcher::${GITHUB_ACTION_PATH}/rust.json"
 
     - name: Install rustup, if needed
       shell: bash
@@ -214,10 +216,11 @@ runs:
 
           # Resolve the correct CARGO_HOME path depending on OS
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "${CARGO_HOME:-$USERPROFILE/.cargo}/bin" | sed 's|/|\\|g' >> $GITHUB_PATH
+            _srt_cargo_bin="$(printf '%s' "${CARGO_HOME:-$USERPROFILE/.cargo}/bin" | tr -d '\n\r' | sed 's|/|\\|g')"
           else
-            echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
+            _srt_cargo_bin="$(printf '%s' "${CARGO_HOME:-$HOME/.cargo}/bin" | tr -d '\n\r')"
           fi
+          printf '%s\n' "$_srt_cargo_bin" >> "$GITHUB_PATH"
         fi
       env:
         RUNNER_OS: "${{ runner.os }}"
@@ -229,11 +232,18 @@ runs:
         _srt_components: ${{inputs.components}}
         _srt_override: ${{inputs.override}}
         _srt_rust_src_dir: ${{inputs.rust-src-dir}}
-        _srt_flags_targets: ${{steps.flags.outputs.targets}}
-        _srt_flags_components: ${{steps.flags.outputs.components}}
-        _srt_flags_downgrade: ${{steps.flags.outputs.downgrade}}
+        _srt_downgrade: ${{contains(inputs.toolchain, 'nightly') && inputs.components && ' --allow-downgrade' || ''}}
       shell: bash
       run: |
+        # Tokenize comma/whitespace-separated inputs the same way upstream's unquoted expansion did
+        _srt_targets_list=()
+        if [[ -n "$_srt_targets" ]]; then
+          read -r -d '' -a _srt_targets_list <<< "${_srt_targets//,/ }" || true
+        fi
+        _srt_components_list=()
+        if [[ -n "$_srt_components" ]]; then
+          read -r -d '' -a _srt_components_list <<< "${_srt_components//,/ }" || true
+        fi
         # Check if value is set
         if [[ -n "$_srt_rust_src_dir" ]]
         then
@@ -255,51 +265,37 @@ runs:
           # https://github.com/rust-lang/rustup/issues/3635#issuecomment-2343511297
           rustup show active-toolchain || rustup toolchain install
           if [[ -n "$_srt_components" ]]; then
-            _srt_comp_args=()
-            while IFS= read -r -d '' _srt_c; do
-              _srt_comp_args+=("$_srt_c")
-            done < <(printf '%s' "${_srt_components//,/ }" | xargs -r printf '%s\0')
-            rustup component add "${_srt_comp_args[@]}"
+            rustup component add ${_srt_components_list[@]+"${_srt_components_list[@]}"}
           fi
           if [[ -n "$_srt_targets" ]]; then
-            _srt_tgt_args=()
-            while IFS= read -r -d '' _srt_t; do
-              _srt_tgt_args+=("$_srt_t")
-            done < <(printf '%s' "${_srt_targets//,/ }" | xargs -r printf '%s\0')
-            rustup target add "${_srt_tgt_args[@]}"
+            rustup target add ${_srt_targets_list[@]+"${_srt_targets_list[@]}"}
           fi
         else
           if [[ -z "$_srt_toolchain" ]]
           then
             _srt_toolchain=stable
           fi
-          _srt_toolchain_args=()
-          while IFS= read -r -d '' _srt_tc; do
-            _srt_toolchain_args+=("$_srt_tc")
-          done < <(printf '%s' "${_srt_toolchain//,/ }" | xargs -r printf '%s\0')
-          _srt_extra_args=()
-          if [[ -n "$_srt_flags_targets" ]]; then
-            while IFS= read -r -d '' _srt_ft; do
-              _srt_extra_args+=("$_srt_ft")
-            done < <(printf '%s' "$_srt_flags_targets" | xargs -r printf '%s\0')
+          _srt_toolchain_list=()
+          read -r -d '' -a _srt_toolchain_list <<< "${_srt_toolchain//,/ }" || true
+          _srt_args=()
+          for _srt_t in ${_srt_targets_list[@]+"${_srt_targets_list[@]}"}; do
+            _srt_args+=(--target "$_srt_t")
+          done
+          for _srt_c in ${_srt_components_list[@]+"${_srt_components_list[@]}"}; do
+            _srt_args+=(--component "$_srt_c")
+          done
+          _srt_args+=(--profile minimal)
+          if [[ -n "$_srt_downgrade" ]]; then
+            _srt_args+=(--allow-downgrade)
           fi
-          if [[ -n "$_srt_flags_components" ]]; then
-            while IFS= read -r -d '' _srt_fc; do
-              _srt_extra_args+=("$_srt_fc")
-            done < <(printf '%s' "$_srt_flags_components" | xargs -r printf '%s\0')
-          fi
-          _srt_downgrade_args=()
-          if [[ -n "$_srt_flags_downgrade" ]]; then
-            while IFS= read -r -d '' _srt_fd; do
-              _srt_downgrade_args+=("$_srt_fd")
-            done < <(printf '%s' "$_srt_flags_downgrade" | xargs -r printf '%s\0')
-          fi
-          rustup toolchain install "${_srt_toolchain_args[@]}" "${_srt_extra_args[@]}" --profile minimal "${_srt_downgrade_args[@]}" --no-self-update
+          _srt_args+=(--no-self-update)
+          rustup toolchain install ${_srt_toolchain_list[@]+"${_srt_toolchain_list[@]}"} "${_srt_args[@]}"
           # Take the last element from the list
           if [[ "$_srt_override" == "true" ]]
           then
-            _srt_last_toolchain="${_srt_toolchain//*,/}"
-            rustup override set "$_srt_last_toolchain"
+            _srt_override_list=()
+            read -r -d '' -a _srt_override_list <<< "${_srt_toolchain//*,/ }" || true
+            rustup override set ${_srt_override_list[@]+"${_srt_override_list[@]}"}
           fi
         fi
 
@@ -322,9 +318,9 @@ runs:
         echo "cachekey=$(echo $_srt_DATE$_srt_HASH | head -c12)" >> $GITHUB_OUTPUT
 
     - name: Downgrade registry access protocol when needed
+      shell: bash
       env:
         _srt_rustc_version: ${{steps.versions.outputs.rustc-version}}
-      shell: bash
       run: |
         # Not all versions support setting CARGO_REGISTRIES_CRATES_IO_PROTOCOL
         # On versions 1.66, 1.67, and 1.68.0-nightly the value "sparse" is still unstable.

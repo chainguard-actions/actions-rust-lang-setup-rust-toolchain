@@ -4,9 +4,8 @@
   "version": "v2.0.0",
   "commit_sha": "ecabd13d1c56bd1345c230e542e9144811ad706f",
   "url": "https://github.com/actions-rust-lang/setup-rust-toolchain",
-  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "policy_sha": "374911c4be584df24e6da57af2d990570ef0f859",
   "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
   "test_agent_version": "2",
-  "harden_agent_version": "2",
-  "dependency_fingerprint": "sha256:403959b2d1cd8c8479ba43850e633202860156b0004f788172009b8fc97b6b20"
+  "harden_agent_version": "2"
 }
